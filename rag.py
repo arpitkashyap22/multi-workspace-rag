@@ -11,9 +11,12 @@ from typing import Any
 import streamlit as st
 from dotenv import load_dotenv
 from google import genai
+from google.genai import types
 
 import db
 import storage
+
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 load_dotenv()
 
@@ -53,23 +56,17 @@ def _get_genai_client() -> genai.Client:
     return genai.Client(api_key=api_key)
 
 
-def get_embedding(text: str) -> list[float]:
-    """
-    Generate a 768-dimensional embedding for text using text-embedding-004.
-    Supports deterministic mock vectors when MOCK_EMBEDDINGS=1 is set for testing.
-    """
-    if os.getenv("MOCK_EMBEDDINGS") == "1":
-        # Deterministic 768-dim mock vector for offline testing
-        h = hashlib.sha256(text.encode("utf-8")).digest()
-        vec = [(float(b) / 255.0) - 0.5 for b in h]
-        vec = (vec * (768 // len(vec) + 1))[:768]
-        norm = sum(x * x for x in vec) ** 0.5 or 1.0
-        return [x / norm for x in vec]
+EMBEDDING_MODEL = "gemini-embedding-001"
+EMBEDDING_CONFIG = types.EmbedContentConfig(output_dimensionality=768)
 
+
+def get_embedding(text: str) -> list[float]:
+    """Generate 768-dimensional embedding for text directly using Gemini."""
     client = _get_genai_client()
     response = client.models.embed_content(
-        model="text-embedding-004",
+        model=EMBEDDING_MODEL,
         contents=text,
+        config=EMBEDDING_CONFIG,
     )
     if not response.embeddings or not response.embeddings[0].values:
         raise ValueError("Failed to generate embedding from Gemini API.")
@@ -77,14 +74,9 @@ def get_embedding(text: str) -> list[float]:
 
 
 def get_embeddings_batch(texts: list[str]) -> list[list[float]]:
-    """
-    Generate 768-dimensional embeddings for a list of texts using text-embedding-004.
-    """
+    """Generate 768-dimensional embeddings for a batch of texts directly using Gemini."""
     if not texts:
         return []
-
-    if os.getenv("MOCK_EMBEDDINGS") == "1":
-        return [get_embedding(t) for t in texts]
 
     client = _get_genai_client()
     batch_size = 50
@@ -93,8 +85,9 @@ def get_embeddings_batch(texts: list[str]) -> list[list[float]]:
     for i in range(0, len(texts), batch_size):
         batch = texts[i : i + batch_size]
         response = client.models.embed_content(
-            model="text-embedding-004",
+            model=EMBEDDING_MODEL,
             contents=batch,
+            config=EMBEDDING_CONFIG,
         )
         for emb in response.embeddings:
             results.append(emb.values)
@@ -104,7 +97,7 @@ def get_embeddings_batch(texts: list[str]) -> list[list[float]]:
 
 def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
     """
-    Splits text into segments of length chunk_size with overlap characters of overlap.
+    Chunks text using LangChain's RecursiveCharacterTextSplitter.
 
     Args:
         text: The input text content.
@@ -112,28 +105,16 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]
         overlap: Overlap between consecutive segments (default: 50 characters).
 
     Returns:
-        list[str]: Non-empty chunks of text.
+        list[str]: Chunks of text.
     """
-    if not text:
+    if not text or not text.strip():
         return []
 
-    step = chunk_size - overlap
-    if step <= 0:
-        raise ValueError("chunk_size must be strictly greater than overlap")
-
-    chunks = []
-    start = 0
-    text_len = len(text)
-    while start < text_len:
-        end = start + chunk_size
-        chunk = text[start:end]
-        if chunk.strip():
-            chunks.append(chunk)
-        if end >= text_len:
-            break
-        start += step
-
-    return chunks
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=overlap,
+    )
+    return splitter.split_text(text)
 
 
 def format_chunks_as_readonly_blocks(chunks_data: list[tuple[str, str | None]]) -> RetrievedContext:

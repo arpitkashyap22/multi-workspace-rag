@@ -13,14 +13,14 @@
 ## Phase 3: Tool Calling Engine
 - [x] Implement `tools.py`: `save_task` (DB write) and `send_discord_alert` (Webhook)
 - [x] Set up Pydantic argument validation and logging to `tool_logs`
-- [ ] Integrate multi-turn tool calling loop with Gemini 1.5 Flash
+- [x] Integrate multi-turn tool calling loop with Gemini 1.5 Flash
 
 ## Phase 4: Streamlit UI
-- [ ] Build Auth screen (Login/Signup toggle)
-- [ ] Build Sidebar: User status, Workspace Switcher, and Create Workspace input
-- [ ] Tab 1 (Chat): Message history, tool execution spinners (`st.status`), source citations
-- [ ] Tab 2 (Documents): File uploader + preview fetched from Neon Object Storage
-- [ ] Tab 3 (Dashboard): Live data tables for `workspace_tasks` and `tool_logs`
+- [x] Build Auth screen (Login/Signup toggle)
+- [x] Build Sidebar: User status, Workspace Switcher, and Create Workspace input
+- [x] Tab 1 (Chat): Message history, tool execution spinners (`st.status`), source citations
+- [x] Tab 2 (Documents): File uploader + preview fetched from Neon Object Storage
+- [x] Tab 3 (Dashboard): Live data tables for `workspace_tasks` and `tool_logs`
 
 ## Phase 5: Verification & Deployment
 - [ ] Isolation Test: Check cross-workspace leakage between 2 workspaces
