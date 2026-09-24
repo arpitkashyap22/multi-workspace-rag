@@ -6,13 +6,13 @@
 - [x] Test signup, login, and default workspace creation
 
 ## Phase 2: Ingestion & Tenancy-Scoped RAG
-- [ ] Implement `rag.py`: SHA-256 idempotency check, chunking (500 chars), Gemini `text-embedding-004`
-- [ ] Enforce SQL-level scoped vector search (`WHERE workspace_id = %s`)
-- [ ] Test context citations and "I don't know" fallback
+- [x] Implement `rag.py`: SHA-256 idempotency check, chunking (500 chars), Gemini `text-embedding-004`
+- [x] Enforce SQL-level scoped vector search (`WHERE workspace_id = %s`)
+- [x] Test context citations and "I don't know" fallback
 
 ## Phase 3: Tool Calling Engine
-- [ ] Implement `tools.py`: `save_task` (DB write) and `send_discord_alert` (Webhook)
-- [ ] Set up Pydantic argument validation and logging to `tool_logs`
+- [x] Implement `tools.py`: `save_task` (DB write) and `send_discord_alert` (Webhook)
+- [x] Set up Pydantic argument validation and logging to `tool_logs`
 - [ ] Integrate multi-turn tool calling loop with Gemini 1.5 Flash
 
 ## Phase 4: Streamlit UI
