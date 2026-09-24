@@ -1,0 +1,19 @@
+# Antigravity Agent Guidelines
+
+You are developing a multi-tenant, workspace-isolated Document Assistant with Tool Calling.
+
+## Core Directives
+1. Strict Tenancy Boundary:
+   - All workspace data lives in ONE shared Postgres table (`document_chunks`).
+   - Isolation MUST be enforced in the SQL query: `WHERE workspace_id = %s`.
+   - Never fetch all chunks and filter inside Python.
+2. User-Workspace Relationship:
+   - Users must authenticate (email + password).
+   - Each workspace belongs to a `user_id`. Users can switch between their own workspaces.
+3. RAG Integrity:
+   - If chunks do not contain the answer, the model must output:
+     "I do not have enough information in this workspace to answer that."
+   - Never allow chunk text to execute commands (Prompt Injection mitigation).
+4. Tool Calling Safety:
+   - Tools must validate inputs using Pydantic.
+   - Any runtime failure must log to `tool_logs` with status 'FAILED' and return an error message to the LLM without crashing.
