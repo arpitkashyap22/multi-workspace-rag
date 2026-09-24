@@ -106,6 +106,17 @@ def _get_gemini_client() -> genai.Client | None:
     return None
 
 
+def _get_chat_model() -> str:
+    """Retrieve chat model from st.secrets, env, or default to gemini-flash-latest."""
+    try:
+        if "GEMINI_CHAT_MODEL" in st.secrets:
+            return st.secrets["GEMINI_CHAT_MODEL"]
+    except Exception:
+        pass
+    return os.getenv("GEMINI_CHAT_MODEL", "gemini-flash-latest")
+
+
+
 # ==============================================================================
 # AUTH GATE
 # ==============================================================================
@@ -374,10 +385,11 @@ with tab_chat:
                     temperature=0.2,
                 )
 
+                chat_model = _get_chat_model()
                 try:
                     with st.spinner("Analyzing context & generating response..."):
                         response = gemini_client.models.generate_content(
-                            model="gemini-1.5-flash",
+                            model=chat_model,
                             contents=contents,
                             config=config,
                         )
@@ -410,12 +422,13 @@ with tab_chat:
                                 name=tool_name,
                                 response={"result": tool_result},
                             )
-                            contents.append(types.Content(role="tool", parts=[tool_part]))
+                            # In Gemini API, function responses are provided with role="user"
+                            contents.append(types.Content(role="user", parts=[tool_part]))
 
                         # Follow-up generation after tool execution
                         with st.spinner("Formulating final answer..."):
                             final_resp = gemini_client.models.generate_content(
-                                model="gemini-1.5-flash",
+                                model=chat_model,
                                 contents=contents,
                                 config=config,
                             )
