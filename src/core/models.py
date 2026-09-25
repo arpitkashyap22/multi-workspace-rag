@@ -33,6 +33,9 @@ class RetrievedContext(BaseModel):
         description="Raw retrieved chunk objects.",
     )
 
+    def __str__(self) -> str:
+        return self.formatted_prompt
+
 
 class IngestionResult(BaseModel):
     """Pydantic model summarizing the outcome of a document ingestion pipeline."""

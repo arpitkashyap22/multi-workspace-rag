@@ -116,7 +116,7 @@ def get_user_workspaces(user_id: str) -> list[dict[str, Any]]:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
                 "SELECT id, user_id, name, created_at FROM workspaces WHERE user_id = %s ORDER BY created_at ASC;",
-                (str(user_id),),
+                (user_id,),
             )
             rows = cur.fetchall()
             return [
@@ -136,9 +136,11 @@ def create_workspace(user_id: str, name: str) -> dict[str, Any]:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
                 "INSERT INTO workspaces (user_id, name) VALUES (%s, %s) RETURNING id, user_id, name, created_at;",
-                (str(user_id), name.strip()),
+                (user_id, name.strip()),
             )
             row = cur.fetchone()
+            if not row:
+                raise RuntimeError(f"Failed to create workspace '{name}': no row returned")
             return {
                 "id": str(row["id"]),
                 "user_id": row["user_id"],
@@ -148,7 +150,7 @@ def create_workspace(user_id: str, name: str) -> dict[str, Any]:
 
 
 # ==============================================================================
-# Documents & Vector Chunks (Tenancy Enforced)
+# Documents
 # ==============================================================================
 
 
@@ -158,7 +160,7 @@ def get_workspace_documents(workspace_id: str) -> list[dict[str, Any]]:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
                 "SELECT id, filename, blob_path, created_at FROM documents WHERE workspace_id = %s ORDER BY created_at DESC;",
-                (str(workspace_id),),
+                (workspace_id,),
             )
             rows = cur.fetchall()
             return [
@@ -183,7 +185,7 @@ def check_document_hash_exists(workspace_id: str, file_hash: str) -> dict[str, A
                 WHERE workspace_id = %s AND file_hash = %s
                 LIMIT 1;
                 """,
-                (str(workspace_id), file_hash),
+                (workspace_id, file_hash),
             )
             row = cur.fetchone()
             if row:
@@ -211,53 +213,12 @@ def save_document_metadata(
                 VALUES (%s, %s, %s, %s)
                 RETURNING id;
                 """,
-                (str(workspace_id), filename, file_hash, blob_path),
+                (workspace_id, filename, file_hash, blob_path),
             )
             doc_row = cur.fetchone()
+            if not doc_row:
+                raise RuntimeError(f"Failed to save document metadata for '{filename}': no row returned")
             return str(doc_row[0])
-
-
-def save_chunk(
-    workspace_id: str,
-    document_id: str,
-    content: str,
-    metadata: dict[str, Any],
-    embedding: list[float],
-) -> None:
-    """Insert a single text chunk with vector embedding into document_chunks."""
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO document_chunks (workspace_id, document_id, content, metadata, embedding)
-                VALUES (%s, %s, %s, %s, %s);
-                """,
-                (str(workspace_id), str(document_id), content, json.dumps(metadata), embedding),
-            )
-
-
-def search_chunks(
-    workspace_id: str,
-    query_embedding: list[float],
-    limit: int = 4,
-) -> list[tuple[str, str | None]]:
-    """
-    Search document_chunks using pgvector cosine distance `<=>`.
-    Strictly isolated with `WHERE workspace_id = %s`.
-    """
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT content, metadata->>'filename'
-                FROM document_chunks
-                WHERE workspace_id = %s
-                ORDER BY embedding <=> %s::vector
-                LIMIT %s;
-                """,
-                (str(workspace_id), query_embedding, limit),
-            )
-            return cur.fetchall()
 
 
 # ==============================================================================
@@ -275,9 +236,11 @@ def save_task(workspace_id: str, title: str, priority: str) -> dict[str, Any]:
                 VALUES (%s, %s, %s)
                 RETURNING id, workspace_id, title, priority, created_at;
                 """,
-                (str(workspace_id), title.strip(), priority.lower()),
+                (workspace_id, title.strip(), priority.lower()),
             )
             row = cur.fetchone()
+            if not row:
+                raise RuntimeError(f"Failed to save task '{title}': no row returned")
             return {
                 "id": str(row["id"]),
                 "workspace_id": str(row["workspace_id"]),
@@ -293,7 +256,7 @@ def get_workspace_tasks(workspace_id: str) -> list[dict[str, Any]]:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
                 "SELECT id, workspace_id, title, priority, created_at FROM workspace_tasks WHERE workspace_id = %s ORDER BY created_at DESC;",
-                (str(workspace_id),),
+                (workspace_id,),
             )
             rows = cur.fetchall()
             return [
@@ -325,7 +288,7 @@ def log_tool_execution(
                     INSERT INTO tool_logs (workspace_id, tool_name, arguments, status)
                     VALUES (%s, %s, %s, %s);
                     """,
-                    (str(workspace_id), tool_name, json.dumps(arguments), status),
+                    (workspace_id, tool_name, json.dumps(arguments), status),
                 )
     except Exception as e:
         print(f"Warning: Failed to write to tool_logs: {e}")
@@ -337,7 +300,7 @@ def get_tool_logs(workspace_id: str) -> list[dict[str, Any]]:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
                 "SELECT id, workspace_id, tool_name, arguments, status, created_at FROM tool_logs WHERE workspace_id = %s ORDER BY created_at DESC;",
-                (str(workspace_id),),
+                (workspace_id,),
             )
             rows = cur.fetchall()
             return [

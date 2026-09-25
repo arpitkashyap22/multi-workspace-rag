@@ -66,6 +66,19 @@ def get_database_url() -> str:
     return get_secret("DATABASE_URL")
 
 
+def get_psycopg_database_url() -> str:
+    """
+    Retrieve PostgreSQL connection URL formatted with postgresql+psycopg://
+    for SQLAlchemy / langchain-postgres vector store integrations using psycopg v3.
+    """
+    url = get_database_url()
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+psycopg://", 1)
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql+psycopg://", 1)
+    return url
+
+
 def get_neon_auth_base_url() -> str:
     """Retrieve Neon Auth REST API base URL."""
     return get_secret("NEON_AUTH_BASE_URL")
