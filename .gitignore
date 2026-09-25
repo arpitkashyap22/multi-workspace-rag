@@ -13,3 +13,6 @@ wheels/
 .env
 .streamlit/secrets.toml
 AI_NOTES.md.bak
+
+# Streamlit agent skills (environment-specific symlinks)
+.agents/*
