@@ -47,7 +47,7 @@ def delete_document_embeddings(workspace_id: str, document_id: str) -> int:
                 WHERE cmetadata->>'document_id' = %s
                   AND cmetadata->>'workspace_id' = %s;
                 """,
-                (str(document_id), str(workspace_id)),
+                (document_id, workspace_id),
             )
             deleted_count = cur.rowcount
             conn.commit()
