@@ -52,3 +52,27 @@ def delete_document_embeddings(workspace_id: str, document_id: str) -> int:
             deleted_count = cur.rowcount
             conn.commit()
             return deleted_count
+
+
+def delete_workspace_embeddings(workspace_id: str) -> int:
+    """
+    Deletes all vector embeddings belonging to a workspace from langchain_pg_embedding.
+
+    Args:
+        workspace_id: The UUID boundary of the workspace.
+
+    Returns:
+        int: Number of deleted embedding rows.
+    """
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM langchain_pg_embedding
+                WHERE cmetadata->>'workspace_id' = %s;
+                """,
+                (workspace_id,),
+            )
+            deleted_count = cur.rowcount
+            conn.commit()
+            return deleted_count

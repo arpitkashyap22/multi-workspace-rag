@@ -17,6 +17,7 @@ from src.services.rag.pipeline import (
     ingest_document,
     retrieve_workspace_chunks,
     delete_document,
+    delete_workspace_pipeline,
 )
 
 __all__ = [
@@ -31,4 +32,5 @@ __all__ = [
     "ingest_document",
     "retrieve_workspace_chunks",
     "delete_document",
+    "delete_workspace_pipeline",
 ]

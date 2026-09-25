@@ -13,13 +13,22 @@ from src.database.documents import (
     save_document_metadata,
     delete_document as db_delete_document,
 )
-from src.services.storage import upload_file_to_blob, delete_file_from_blob
+from src.database.workspaces import delete_workspace as db_delete_workspace
+from src.services.storage import (
+    upload_file_to_blob,
+    delete_file_from_blob,
+    delete_workspace_blobs,
+)
 from src.services.rag.parser import extract_text_from_file
 from src.services.rag.embeddings import (
     load_text_document,
     chunk_documents,
 )
-from src.services.rag.vector_store import get_vector_store, delete_document_embeddings
+from src.services.rag.vector_store import (
+    get_vector_store,
+    delete_document_embeddings,
+    delete_workspace_embeddings,
+)
 from src.services.rag.context_builder import format_documents_as_readonly_blocks
 
 
@@ -167,4 +176,39 @@ def delete_document(workspace_id: str, document_id: str) -> dict[str, Any]:
         "blob_deleted": blob_deleted,
         "chunks_deleted": chunks_deleted,
         "message": f"Successfully deleted '{filename}' and removed {chunks_deleted} vector embeddings.",
+    }
+
+
+def delete_workspace_pipeline(user_id: str, workspace_id: str) -> dict[str, Any]:
+    """
+    Orchestrates the complete deletion of a workspace and all of its assets:
+    1. Removes all vector embeddings in PostgreSQL pgvector.
+    2. Deletes all raw blobs in Neon Object Storage under workspaces/{workspace_id}/.
+    3. Deletes workspace record from PostgreSQL workspaces table (cascades to documents, tasks, logs).
+
+    Args:
+        user_id: The ID of the owning user.
+        workspace_id: The UUID of the workspace to delete.
+
+    Returns:
+        dict[str, Any]: Deletion summary report.
+    """
+    # 1. Delete vector embeddings
+    vectors_deleted = delete_workspace_embeddings(workspace_id=workspace_id)
+
+    # 2. Delete all S3 blobs
+    blobs_deleted = delete_workspace_blobs(workspace_id=workspace_id)
+
+    # 3. Delete workspace DB record (automatically cascades to documents, tasks, logs)
+    deleted_ws = db_delete_workspace(user_id=user_id, workspace_id=workspace_id)
+    if not deleted_ws:
+        raise ValueError(f"Workspace '{workspace_id}' not found or not owned by user.")
+
+    return {
+        "success": True,
+        "workspace_id": workspace_id,
+        "workspace_name": deleted_ws["name"],
+        "vectors_deleted": vectors_deleted,
+        "blobs_deleted": blobs_deleted,
+        "message": f"Successfully deleted workspace '{deleted_ws['name']}'.",
     }

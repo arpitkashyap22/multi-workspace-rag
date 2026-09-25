@@ -45,3 +45,29 @@ def create_workspace(user_id: str, name: str) -> dict[str, Any]:
                 "name": row["name"],
                 "created_at": row["created_at"],
             }
+
+
+def delete_workspace(user_id: str, workspace_id: str) -> dict[str, Any] | None:
+    """
+    Deletes a workspace record strictly scoped to user_id.
+    Because of ON DELETE CASCADE, foreign key tables (documents, tasks, tool_logs)
+    are automatically cleaned up at the database level.
+    """
+    with get_db_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """
+                DELETE FROM workspaces
+                WHERE id = %s AND user_id = %s
+                RETURNING id, user_id, name;
+                """,
+                (workspace_id, user_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {
+                "id": str(row["id"]),
+                "user_id": str(row["user_id"]),
+                "name": row["name"],
+            }
