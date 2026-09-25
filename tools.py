@@ -1,7 +1,7 @@
 """
-Tool execution and Gemini function calling module for multi-workspace document assistant.
-Supports task persistence in PostgreSQL, Discord webhook alerts, Pydantic validation,
-and auditable execution logging to tool_logs.
+Workspace tools and LangChain integration for Document Assistant Agent.
+Defines workspace-scoped tools using the @tool decorator for clarity and readability,
+with Pydantic validation and audit logging to tool_logs.
 """
 
 import os
@@ -10,9 +10,9 @@ from typing import Any
 import requests
 import streamlit as st
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field, field_validator, ValidationError
-from google.genai import types
+from pydantic import BaseModel, Field, field_validator
 from psycopg.rows import dict_row
+from langchain_core.tools import BaseTool, tool
 
 import db
 
@@ -32,15 +32,15 @@ def _get_secret(key: str, default: str | None = None) -> str:
     return val
 
 
-# ==========================================
-# Pydantic Input Schemas
-# ==========================================
+# ==============================================================================
+# Pydantic Schemas for Tool Arguments & Dashboard Records
+# ==============================================================================
 
 
 class SaveTaskInput(BaseModel):
-    """Schema for saving a task with title and priority."""
+    """Pydantic input schema for saving a task with title and priority."""
 
-    title: str = Field(..., min_length=1, description="The title or description of the task.")
+    title: str = Field(..., min_length=1, description="The title or clear description of the task.")
     priority: str = Field(..., description="Priority level of the task: 'low', 'medium', or 'high'.")
 
     @field_validator("priority")
@@ -53,95 +53,47 @@ class SaveTaskInput(BaseModel):
 
 
 class SendDiscordAlertInput(BaseModel):
-    """Schema for sending an alert to Discord."""
+    """Pydantic input schema for sending an alert message to Discord."""
 
-    message: str = Field(..., min_length=1, description="The alert message content to send to Discord.")
-
-
-# ==========================================
-# Tool Implementations
-# ==========================================
+    message: str = Field(..., min_length=1, description="The alert message content to broadcast to Discord.")
 
 
-def save_task(
-    title: str,
-    priority: str,
-    workspace_id: str | None = None,
-) -> str:
-    """
-    Inserts a record into workspace_tasks scoped to workspace_id.
-    Supports:
-      - save_task(title="...", priority="high", workspace_id="...")
-      - save_task(title, priority, workspace_id=...)
-      - save_task(workspace_id, title, priority)
+class TaskRecord(BaseModel):
+    """Pydantic model for a workspace task stored in workspace_tasks."""
 
-    Args:
-        title: Task title or description
-        priority: Priority ('low', 'medium', 'high')
-        workspace_id: Workspace UUID string
+    id: str
+    workspace_id: str
+    title: str
+    priority: str
+    created_at: Any
 
-    Returns:
-        str: Status message with created task details.
-    """
-    # Detect if invoked positionally as save_task(workspace_id, title, priority)
-    if workspace_id and workspace_id.strip().lower() in ("low", "medium", "high"):
-        actual_ws = title
-        actual_title = priority
-        actual_priority = workspace_id
-    else:
-        actual_ws = workspace_id
-        actual_title = title
-        actual_priority = priority
+    def __getitem__(self, item: str) -> Any:
+        return getattr(self, item)
 
-    if not actual_ws:
-        raise ValueError("workspace_id is required to scope the task.")
-
-    # Validate with Pydantic
-    validated = SaveTaskInput(title=actual_title, priority=actual_priority)
-
-    with db.get_db_connection() as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(
-                """
-                INSERT INTO workspace_tasks (workspace_id, title, priority)
-                VALUES (%s, %s, %s)
-                RETURNING id, workspace_id, title, priority, created_at;
-                """,
-                (str(actual_ws), validated.title, validated.priority),
-            )
-            row = cur.fetchone()
-            conn.commit()
-
-    return f"Task '{validated.title}' successfully saved with priority '{validated.priority}' (Task ID: {row['id']})."
+    def get(self, item: str, default: Any = None) -> Any:
+        return getattr(self, item, default)
 
 
-def send_discord_alert(message: str) -> str:
-    """
-    Posts an alert message to Discord webhook using DISCORD_WEBHOOK_URL.
+class ToolLogRecord(BaseModel):
+    """Pydantic model for an audit log record stored in tool_logs."""
 
-    Args:
-        message: The message content to send.
+    id: str
+    workspace_id: str
+    tool_name: str
+    arguments: Any
+    status: str
+    created_at: Any
 
-    Returns:
-        str: Clean confirmation message.
-    """
-    validated = SendDiscordAlertInput(message=message)
-    webhook_url = _get_secret("DISCORD_WEBHOOK_URL")
+    def __getitem__(self, item: str) -> Any:
+        return getattr(self, item)
 
-    payload = {"content": validated.message}
-    response = requests.post(webhook_url, json=payload, timeout=10)
-
-    if response.status_code not in (200, 204):
-        raise RuntimeError(
-            f"Discord webhook failed with status code {response.status_code}: {response.text}"
-        )
-
-    return f"Discord alert successfully sent: '{validated.message}'."
+    def get(self, item: str, default: Any = None) -> Any:
+        return getattr(self, item, default)
 
 
-# ==========================================
-# Tool Execution & Audit Logging
-# ==========================================
+# ==============================================================================
+# Audit Logging Helper
+# ==============================================================================
 
 
 def _log_tool_execution(
@@ -169,77 +121,113 @@ def _log_tool_execution(
         print(f"Warning: Failed to write to tool_logs: {e}")
 
 
-def execute_tool(workspace_id: str, tool_name: str, tool_args: Any) -> str:
+# ==============================================================================
+# Core Tool Actions
+# ==============================================================================
+
+
+def save_task(
+    title: str,
+    priority: str,
+    workspace_id: str,
+) -> str:
     """
-    Executes a tool call requested by Gemini with safety and logging:
-    1. Validates arguments using Pydantic.
-    2. Runs inside a try/except block (no crash on runtime failure).
-    3. Records execution in tool_logs with status 'SUCCESS' or 'FAILED'.
-    4. Returns a clean string message to feed back into the model.
-
-    Args:
-        workspace_id: The UUID of the active workspace.
-        tool_name: Name of the tool to execute ('save_task' or 'send_discord_alert').
-        tool_args: Tool arguments (dict or JSON string).
-
-    Returns:
-        str: Output message for the model.
+    Inserts a task into workspace_tasks scoped strictly to workspace_id.
+    Logs execution to tool_logs audit table.
     """
-    # Parse arguments if string
-    if isinstance(tool_args, str):
-        try:
-            tool_args = json.loads(tool_args)
-        except Exception:
-            tool_args = {"raw": tool_args}
-
-    if not isinstance(tool_args, dict):
-        tool_args = {}
+    if not workspace_id:
+        raise ValueError("workspace_id is required to scope the task.")
 
     status = "FAILED"
-    result_message = ""
-
     try:
-        if tool_name == "save_task":
-            validated_task = SaveTaskInput(**tool_args)
-            result_message = save_task(
-                title=validated_task.title,
-                priority=validated_task.priority,
-                workspace_id=workspace_id,
-            )
-            status = "SUCCESS"
+        validated = SaveTaskInput(title=title, priority=priority)
 
-        elif tool_name == "send_discord_alert":
-            validated_alert = SendDiscordAlertInput(**tool_args)
-            result_message = send_discord_alert(message=validated_alert.message)
-            status = "SUCCESS"
+        with db.get_db_connection() as conn:
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    """
+                    INSERT INTO workspace_tasks (workspace_id, title, priority)
+                    VALUES (%s, %s, %s)
+                    RETURNING id, workspace_id, title, priority, created_at;
+                    """,
+                    (str(workspace_id), validated.title, validated.priority),
+                )
+                row = cur.fetchone()
+                conn.commit()
 
-        else:
-            raise ValueError(
-                f"Unknown tool '{tool_name}'. Available tools: 'save_task', 'send_discord_alert'."
-            )
-
-    except ValidationError as val_err:
-        status = "FAILED"
-        err_details = "; ".join([f"{e['loc'][0]}: {e['msg']}" for e in val_err.errors()])
-        result_message = f"Tool '{tool_name}' failed input validation: {err_details}"
-
+        status = "SUCCESS"
+        return f"Task '{validated.title}' successfully saved with priority '{validated.priority}' (Task ID: {row['id']})."
     except Exception as exc:
         status = "FAILED"
-        result_message = f"Tool '{tool_name}' execution failed: {str(exc)}"
-
+        return f"Failed to save task: {str(exc)}"
     finally:
-        _log_tool_execution(workspace_id, tool_name, tool_args, status)
-
-    return result_message
+        _log_tool_execution(workspace_id, "save_task", {"title": title, "priority": priority}, status)
 
 
-# ==========================================
+def send_discord_alert(message: str, workspace_id: str | None = None) -> str:
+    """
+    Posts an alert message to Discord webhook using DISCORD_WEBHOOK_URL.
+    Logs execution to tool_logs audit table.
+    """
+    status = "FAILED"
+    try:
+        validated = SendDiscordAlertInput(message=message)
+        webhook_url = _get_secret("DISCORD_WEBHOOK_URL")
+
+        payload = {"content": validated.message}
+        response = requests.post(webhook_url, json=payload, timeout=10)
+
+        if response.status_code not in (200, 204):
+            raise RuntimeError(
+                f"Discord webhook returned status code {response.status_code}: {response.text}"
+            )
+
+        status = "SUCCESS"
+        return f"Discord alert successfully sent: '{validated.message}'."
+    except Exception as exc:
+        status = "FAILED"
+        return f"Failed to send Discord alert: {str(exc)}"
+    finally:
+        _log_tool_execution(workspace_id, "send_discord_alert", {"message": message}, status)
+
+
+# ==============================================================================
+# LangChain @tool Declarations & Factory
+# ==============================================================================
+
+
+def get_workspace_tools(workspace_id: str) -> list[BaseTool]:
+    """
+    Creates LangChain BaseTool instances using the @tool decorator,
+    with the target workspace_id bound directly into the execution closure.
+
+    Args:
+        workspace_id: The UUID of the current active workspace.
+
+    Returns:
+        list[BaseTool]: Clean LangChain tools defined via @tool.
+    """
+
+    @tool("save_task", args_schema=SaveTaskInput)
+    def save_task_tool(title: str, priority: str) -> str:
+        """Save a new task with a title and priority ('low', 'medium', 'high') to the workspace task tracker."""
+        return save_task(title=title, priority=priority, workspace_id=workspace_id)
+
+    @tool("send_discord_alert", args_schema=SendDiscordAlertInput)
+    def send_discord_alert_tool(message: str) -> str:
+        """Send a real-time notification or alert message to the Discord channel via webhook."""
+        return send_discord_alert(message=message, workspace_id=workspace_id)
+
+    return [save_task_tool, send_discord_alert_tool]
+
+
+# ==============================================================================
 # Dashboard Queries
-# ==========================================
+# ==============================================================================
 
 
-def get_workspace_tasks(workspace_id: str) -> list[dict]:
-    """Retrieve all tasks for a workspace ordered by most recent."""
+def get_workspace_tasks(workspace_id: str) -> list[TaskRecord]:
+    """Retrieve all tasks for a workspace ordered by most recent, returning Pydantic models."""
     with db.get_db_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
@@ -252,19 +240,19 @@ def get_workspace_tasks(workspace_id: str) -> list[dict]:
                 (str(workspace_id),),
             )
             return [
-                {
-                    "id": str(r["id"]),
-                    "workspace_id": str(r["workspace_id"]),
-                    "title": r["title"],
-                    "priority": r["priority"],
-                    "created_at": r["created_at"],
-                }
+                TaskRecord(
+                    id=str(r["id"]),
+                    workspace_id=str(r["workspace_id"]),
+                    title=r["title"],
+                    priority=r["priority"],
+                    created_at=r["created_at"],
+                )
                 for r in cur.fetchall()
             ]
 
 
-def get_tool_logs(workspace_id: str) -> list[dict]:
-    """Retrieve execution logs for a workspace ordered by most recent."""
+def get_tool_logs(workspace_id: str) -> list[ToolLogRecord]:
+    """Retrieve audit logs for a workspace ordered by most recent, returning Pydantic models."""
     with db.get_db_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
@@ -277,57 +265,13 @@ def get_tool_logs(workspace_id: str) -> list[dict]:
                 (str(workspace_id),),
             )
             return [
-                {
-                    "id": str(r["id"]),
-                    "workspace_id": str(r["workspace_id"]),
-                    "tool_name": r["tool_name"],
-                    "arguments": r["arguments"],
-                    "status": r["status"],
-                    "created_at": r["created_at"],
-                }
+                ToolLogRecord(
+                    id=str(r["id"]),
+                    workspace_id=str(r["workspace_id"]),
+                    tool_name=r["tool_name"],
+                    arguments=r["arguments"],
+                    status=r["status"],
+                    created_at=r["created_at"],
+                )
                 for r in cur.fetchall()
             ]
-
-
-# ==========================================
-# Gemini Function Declarations & Tool Export
-# ==========================================
-
-save_task_declaration = types.FunctionDeclaration(
-    name="save_task",
-    description="Save a new task with a title and priority level to the workspace task tracker.",
-    parameters=types.Schema(
-        type=types.Type.OBJECT,
-        properties={
-            "title": types.Schema(
-                type=types.Type.STRING,
-                description="The clear description or title of the action item or task to save.",
-            ),
-            "priority": types.Schema(
-                type=types.Type.STRING,
-                description="Priority level of the task. Allowed values: 'low', 'medium', 'high'.",
-                enum=["low", "medium", "high"],
-            ),
-        },
-        required=["title", "priority"],
-    ),
-)
-
-send_discord_alert_declaration = types.FunctionDeclaration(
-    name="send_discord_alert",
-    description="Send a real-time notification or alert message to the Discord channel via webhook.",
-    parameters=types.Schema(
-        type=types.Type.OBJECT,
-        properties={
-            "message": types.Schema(
-                type=types.Type.STRING,
-                description="The content of the notification or alert message to post to Discord.",
-            ),
-        },
-        required=["message"],
-    ),
-)
-
-gemini_function_declarations = [save_task_declaration, send_discord_alert_declaration]
-gemini_tool = types.Tool(function_declarations=gemini_function_declarations)
-tools = [gemini_tool]
