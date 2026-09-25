@@ -45,7 +45,7 @@ def render_sidebar() -> Tuple[str, str]:
             unsafe_allow_html=True,
         )
 
-        if st.button("🚪 Logout", use_container_width=True):
+        if st.button("🚪 Logout", width="stretch"):
             st.session_state.clear()
             st.rerun()
 
@@ -71,7 +71,7 @@ def render_sidebar() -> Tuple[str, str]:
         # Add New Workspace
         with st.expander("➕ Create Workspace", expanded=False):
             new_ws_name = st.text_input("Workspace Name", placeholder="e.g. Finance, Research")
-            if st.button("Create Workspace", use_container_width=True, type="secondary"):
+            if st.button("Create Workspace", width="stretch", type="secondary"):
                 if new_ws_name.strip():
                     with st.spinner("Creating workspace..."):
                         created_ws = repository.create_workspace(user_id, new_ws_name.strip())

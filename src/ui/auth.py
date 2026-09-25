@@ -47,7 +47,7 @@ def render_auth_gate() -> bool:
                 password = st.text_input("Password", type="password", placeholder="Enter your password")
                 submitted = st.form_submit_button(
                     "Sign In" if auth_mode == "Sign In" else "Create Account & Seed Workspace",
-                    use_container_width=True,
+                    width="stretch",
                     type="primary",
                 )
 

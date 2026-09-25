@@ -78,3 +78,26 @@ def get_file_from_blob(blob_path: str) -> str:
         The file content decoded as a UTF-8 string.
     """
     return get_file_bytes_from_blob(blob_path).decode("utf-8", errors="replace")
+
+
+def delete_file_from_blob(blob_path: str) -> bool:
+    """
+    Deletes a file from Neon Object Storage.
+
+    Args:
+        blob_path: The path of the file in the bucket.
+
+    Returns:
+        True if successfully deleted or already absent, False on error.
+    """
+    try:
+        client, bucket_name = _get_s3_client()
+        clean_path = blob_path.lstrip("/")
+        client.delete_object(
+            Bucket=bucket_name,
+            Key=clean_path,
+        )
+        return True
+    except Exception as e:
+        print(f"Warning: Failed to delete object at {blob_path}: {e}")
+        return False

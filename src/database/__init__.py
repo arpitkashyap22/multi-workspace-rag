@@ -10,6 +10,7 @@ from src.database.documents import (
     get_workspace_documents,
     check_document_hash_exists,
     save_document_metadata,
+    delete_document,
 )
 from src.database.tasks import save_task, get_workspace_tasks
 from src.database.audit import log_tool_execution, get_tool_logs
@@ -24,6 +25,7 @@ __all__ = [
     "get_workspace_documents",
     "check_document_hash_exists",
     "save_document_metadata",
+    "delete_document",
     "save_task",
     "get_workspace_tasks",
     "log_tool_execution",

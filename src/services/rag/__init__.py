@@ -13,7 +13,11 @@ from src.services.rag.embeddings import (
 )
 from src.services.rag.vector_store import get_vector_store
 from src.services.rag.context_builder import format_documents_as_readonly_blocks
-from src.services.rag.pipeline import ingest_document, retrieve_workspace_chunks
+from src.services.rag.pipeline import (
+    ingest_document,
+    retrieve_workspace_chunks,
+    delete_document,
+)
 
 __all__ = [
     "extract_text_from_pdf",
@@ -26,4 +30,5 @@ __all__ = [
     "format_documents_as_readonly_blocks",
     "ingest_document",
     "retrieve_workspace_chunks",
+    "delete_document",
 ]

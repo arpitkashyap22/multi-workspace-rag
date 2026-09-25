@@ -1,7 +1,7 @@
 """
 Documents Tab module.
-Renders document ingestion, object storage persistence, and file previews
-scoped to the active workspace with support for .txt, .md, and .pdf documents.
+Renders document ingestion, object storage persistence, file previews,
+and safe document deletion with confirmation dialogs.
 """
 
 import streamlit as st
@@ -9,9 +9,40 @@ from src.database import repository
 from src.services import rag, storage
 
 
+@st.dialog("Delete Document Confirmation")
+def confirm_delete_dialog(workspace_id: str, document_id: str, filename: str) -> None:
+    """
+    Renders a confirmation modal with explicit warnings before permanently deleting a document.
+    """
+    st.warning(f"⚠️ Are you sure you want to delete **{filename}** from this workspace?")
+    st.error(
+        "**Permanent Deletion Warning:**\n\n"
+        "This action will permanently:\n"
+        "• Remove the original file from Neon Object Storage\n"
+        "• Delete all vector embeddings from PostgreSQL pgvector\n"
+        "• Remove document metadata and citations from the Document Assistant\n\n"
+        "**This action cannot be undone.**"
+    )
+
+    col_cancel, col_confirm = st.columns(2)
+    with col_cancel:
+        if st.button("Cancel", width="stretch", key=f"dlg_cancel_{document_id}"):
+            st.rerun()
+
+    with col_confirm:
+        if st.button("🚨 Yes, Delete Permanently", type="primary", width="stretch", key=f"dlg_confirm_{document_id}"):
+            with st.spinner(f"Deleting '{filename}' and associated vector embeddings..."):
+                try:
+                    res = rag.delete_document(workspace_id=workspace_id, document_id=document_id)
+                    st.toast(res.get("message", f"Deleted {filename}"), icon="🗑️")
+                    st.rerun()
+                except Exception as err:
+                    st.error(f"Failed to delete document: {err}")
+
+
 def render_documents_tab(active_ws_id: str, active_ws_name: str) -> None:
     """
-    Renders the document management, upload, and inspection UI.
+    Renders the document management, upload, inspection, and deletion UI.
 
     Args:
         active_ws_id: UUID of the current active workspace.
@@ -34,7 +65,7 @@ def render_documents_tab(active_ws_id: str, active_ws_name: str) -> None:
 
         with col_up2:
             st.markdown("<br>", unsafe_allow_html=True)
-            upload_btn = st.button("📤 Ingest Document", use_container_width=True, type="primary")
+            upload_btn = st.button("📤 Ingest Document", width="stretch", type="primary")
 
         if upload_btn and uploaded_file is not None:
             file_bytes = uploaded_file.read()
@@ -94,13 +125,26 @@ def render_documents_tab(active_ws_id: str, active_ws_name: str) -> None:
 
                     with col_actions:
                         st.download_button(
-                            label="⬇️ Download File",
+                            label="⬇️ Download",
                             data=raw_bytes,
                             file_name=filename,
                             mime=mime_type,
                             key=f"dl_{doc_id}",
-                            use_container_width=True,
+                            width="stretch",
                         )
+
+                        if st.button(
+                            "🗑️ Delete",
+                            key=f"btn_del_{doc_id}",
+                            width="stretch",
+                            type="secondary",
+                            help=f"Delete '{filename}', its storage blob, and its vector embeddings.",
+                        ):
+                            confirm_delete_dialog(
+                                workspace_id=active_ws_id,
+                                document_id=doc_id,
+                                filename=filename,
+                            )
 
                     st.markdown("**Content Preview:**")
                     if is_pdf:

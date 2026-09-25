@@ -5,16 +5,21 @@ vector embedding, and multi-tenant similarity retrieval.
 """
 
 import hashlib
+from typing import Any
 from langchain_core.documents import Document
 from src.core.models import IngestionResult, RetrievedContext
-from src.database.documents import check_document_hash_exists, save_document_metadata
-from src.services.storage import upload_file_to_blob
+from src.database.documents import (
+    check_document_hash_exists,
+    save_document_metadata,
+    delete_document as db_delete_document,
+)
+from src.services.storage import upload_file_to_blob, delete_file_from_blob
 from src.services.rag.parser import extract_text_from_file
 from src.services.rag.embeddings import (
     load_text_document,
     chunk_documents,
 )
-from src.services.rag.vector_store import get_vector_store
+from src.services.rag.vector_store import get_vector_store, delete_document_embeddings
 from src.services.rag.context_builder import format_documents_as_readonly_blocks
 
 
@@ -124,3 +129,42 @@ def retrieve_workspace_chunks(
         filter={"workspace_id": workspace_id},
     )
     return format_documents_as_readonly_blocks(results)
+
+
+def delete_document(workspace_id: str, document_id: str) -> dict[str, Any]:
+    """
+    Completely deletes a document and all related resources from a workspace:
+    1. Removes document metadata from PostgreSQL documents table.
+    2. Deletes raw file from Neon Object Storage.
+    3. Deletes all embedding chunks from PostgreSQL pgvector table.
+
+    Args:
+        workspace_id: The UUID boundary of the workspace.
+        document_id: The UUID of the document to delete.
+
+    Returns:
+        dict[str, Any]: Deletion summary report.
+    """
+    # 1. Delete from PostgreSQL documents table
+    deleted_doc = db_delete_document(workspace_id=workspace_id, document_id=document_id)
+    if not deleted_doc:
+        raise ValueError(f"Document with ID '{document_id}' not found in workspace.")
+
+    filename = deleted_doc["filename"]
+    blob_path = deleted_doc["blob_path"]
+
+    # 2. Delete raw file from Neon Object Storage
+    blob_deleted = delete_file_from_blob(blob_path)
+
+    # 3. Delete vector embeddings from pgvector
+    chunks_deleted = delete_document_embeddings(workspace_id=workspace_id, document_id=document_id)
+
+    return {
+        "success": True,
+        "document_id": document_id,
+        "filename": filename,
+        "blob_path": blob_path,
+        "blob_deleted": blob_deleted,
+        "chunks_deleted": chunks_deleted,
+        "message": f"Successfully deleted '{filename}' and removed {chunks_deleted} vector embeddings.",
+    }

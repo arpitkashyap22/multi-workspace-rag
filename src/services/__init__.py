@@ -6,6 +6,7 @@ from src.services.storage import (
     upload_file_to_blob,
     get_file_from_blob,
     get_file_bytes_from_blob,
+    delete_file_from_blob,
 )
 from src.services.rag import (
     extract_text_from_pdf,
@@ -18,12 +19,14 @@ from src.services.rag import (
     format_documents_as_readonly_blocks,
     retrieve_workspace_chunks,
     ingest_document,
+    delete_document,
 )
 
 __all__ = [
     "upload_file_to_blob",
     "get_file_from_blob",
     "get_file_bytes_from_blob",
+    "delete_file_from_blob",
     "extract_text_from_pdf",
     "extract_text_from_file",
     "get_embeddings_model",
@@ -34,4 +37,5 @@ __all__ = [
     "format_documents_as_readonly_blocks",
     "retrieve_workspace_chunks",
     "ingest_document",
+    "delete_document",
 ]

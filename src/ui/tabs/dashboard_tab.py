@@ -51,7 +51,7 @@ def render_dashboard_tab(active_ws_id: str, active_ws_name: str) -> None:
                 }
                 for t in tasks
             ]
-            st.dataframe(formatted_tasks, use_container_width=True, hide_index=True)
+            st.dataframe(formatted_tasks, width="stretch", hide_index=True)
         else:
             st.info("No tasks recorded in this workspace. Ask the assistant to create tasks via chat!")
 
@@ -77,6 +77,6 @@ def render_dashboard_tab(active_ws_id: str, active_ws_name: str) -> None:
                 }
                 for l in logs
             ]
-            st.dataframe(formatted_logs, use_container_width=True, hide_index=True)
+            st.dataframe(formatted_logs, width="stretch", hide_index=True)
         else:
             st.info("No tool executions logged yet in this workspace.")
