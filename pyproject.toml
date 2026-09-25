@@ -20,3 +20,10 @@ dependencies = [
     "requests>=2.34.2",
     "streamlit>=1.64.0",
 ]
+
+[tool.pyright]
+extraPaths = ["."]
+
+[tool.basedpyright]
+extraPaths = ["."]
+
