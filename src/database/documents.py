@@ -1,0 +1,75 @@
+"""
+Documents database repository module.
+Handles document record metadata and idempotency checks strictly scoped by workspace_id.
+"""
+
+from typing import Any
+from psycopg.rows import dict_row
+from src.database.connection import get_db_connection
+
+
+def get_workspace_documents(workspace_id: str) -> list[dict[str, Any]]:
+    """Retrieve all document records for a workspace."""
+    with get_db_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                "SELECT id, filename, blob_path, created_at FROM documents WHERE workspace_id = %s ORDER BY created_at DESC;",
+                (workspace_id,),
+            )
+            rows = cur.fetchall()
+            return [
+                {
+                    "id": str(r["id"]),
+                    "filename": r["filename"],
+                    "blob_path": r["blob_path"],
+                    "created_at": r["created_at"],
+                }
+                for r in rows
+            ]
+
+
+def check_document_hash_exists(workspace_id: str, file_hash: str) -> dict[str, Any] | None:
+    """Check if a file with the given SHA-256 hash already exists in this workspace."""
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, filename, blob_path, created_at
+                FROM documents
+                WHERE workspace_id = %s AND file_hash = %s
+                LIMIT 1;
+                """,
+                (workspace_id, file_hash),
+            )
+            row = cur.fetchone()
+            if row:
+                return {
+                    "id": str(row[0]),
+                    "filename": row[1],
+                    "blob_path": row[2],
+                    "created_at": row[3],
+                }
+            return None
+
+
+def save_document_metadata(
+    workspace_id: str,
+    filename: str,
+    file_hash: str,
+    blob_path: str,
+) -> str:
+    """Insert document metadata and return generated UUID."""
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO documents (workspace_id, filename, file_hash, blob_path)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id;
+                """,
+                (workspace_id, filename, file_hash, blob_path),
+            )
+            doc_row = cur.fetchone()
+            if not doc_row:
+                raise RuntimeError(f"Failed to save document metadata for '{filename}': no row returned")
+            return str(doc_row[0])

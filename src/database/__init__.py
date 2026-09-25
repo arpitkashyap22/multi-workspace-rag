@@ -3,27 +3,29 @@ Database package for PostgreSQL connection, pgvector registration, and tenancy-i
 """
 
 from src.database.connection import get_db_connection
-from src.database.repository import (
-    signup_user,
-    login_user,
-    create_workspace,
-    get_user_workspaces,
+from src.database import repository
+from src.database.auth import signup_user, login_user
+from src.database.workspaces import get_user_workspaces, create_workspace
+from src.database.documents import (
     get_workspace_documents,
+    check_document_hash_exists,
     save_document_metadata,
-    get_workspace_tasks,
-    get_tool_logs,
-    log_tool_execution,
 )
+from src.database.tasks import save_task, get_workspace_tasks
+from src.database.audit import log_tool_execution, get_tool_logs
 
 __all__ = [
     "get_db_connection",
+    "repository",
     "signup_user",
     "login_user",
-    "create_workspace",
     "get_user_workspaces",
+    "create_workspace",
     "get_workspace_documents",
+    "check_document_hash_exists",
     "save_document_metadata",
+    "save_task",
     "get_workspace_tasks",
-    "get_tool_logs",
     "log_tool_execution",
+    "get_tool_logs",
 ]
