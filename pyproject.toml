@@ -17,6 +17,7 @@ dependencies = [
     "psycopg2-binary>=2.9.13",
     "psycopg[binary]>=3.3.6",
     "pydantic>=2.13.5",
+    "pypdf>=6.19.0",
     "python-dotenv>=1.2.3",
     "requests>=2.34.2",
     "streamlit>=1.64.0",

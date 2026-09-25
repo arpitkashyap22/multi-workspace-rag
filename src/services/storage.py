@@ -48,6 +48,25 @@ def upload_file_to_blob(workspace_id: str, filename: str, file_bytes: bytes | st
     return blob_path
 
 
+def get_file_bytes_from_blob(blob_path: str) -> bytes:
+    """
+    Downloads and returns the raw file content as bytes.
+
+    Args:
+        blob_path: The path of the file in the bucket.
+
+    Returns:
+        The raw file bytes.
+    """
+    client, bucket_name = _get_s3_client()
+    clean_path = blob_path.lstrip("/")
+    response = client.get_object(
+        Bucket=bucket_name,
+        Key=clean_path,
+    )
+    return response["Body"].read()
+
+
 def get_file_from_blob(blob_path: str) -> str:
     """
     Downloads and returns the file content as a string.
@@ -58,10 +77,4 @@ def get_file_from_blob(blob_path: str) -> str:
     Returns:
         The file content decoded as a UTF-8 string.
     """
-    client, bucket_name = _get_s3_client()
-    clean_path = blob_path.lstrip("/")
-    response = client.get_object(
-        Bucket=bucket_name,
-        Key=clean_path,
-    )
-    return response["Body"].read().decode("utf-8", errors="replace")
+    return get_file_bytes_from_blob(blob_path).decode("utf-8", errors="replace")

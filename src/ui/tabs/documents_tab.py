@@ -1,7 +1,7 @@
 """
 Documents Tab module.
 Renders document ingestion, object storage persistence, and file previews
-scoped to the active workspace.
+scoped to the active workspace with support for .txt, .md, and .pdf documents.
 """
 
 import streamlit as st
@@ -27,9 +27,9 @@ def render_documents_tab(active_ws_id: str, active_ws_name: str) -> None:
 
         with col_up1:
             uploaded_file = st.file_uploader(
-                "Upload a document (.txt or .md)",
-                type=["txt", "md"],
-                help="Uploaded files are hashed with SHA-256 for idempotency, uploaded to Neon Object Storage, and chunked with vector embeddings.",
+                "Upload a document (.txt, .md, or .pdf)",
+                type=["txt", "md", "pdf"],
+                help="Uploaded files (.txt, .md, .pdf) are hashed with SHA-256 for idempotency, uploaded to Neon Object Storage, and chunked with vector embeddings.",
             )
 
         with col_up2:
@@ -38,21 +38,23 @@ def render_documents_tab(active_ws_id: str, active_ws_name: str) -> None:
 
         if upload_btn and uploaded_file is not None:
             file_bytes = uploaded_file.read()
-            text_content = file_bytes.decode("utf-8", errors="replace")
+            filename = uploaded_file.name
 
-            with st.spinner("Processing SHA-256 hash, uploading blob, & generating embeddings..."):
-                ingest_res = rag.ingest_document(
-                    workspace_id=active_ws_id,
-                    filename=uploaded_file.name,
-                    text_content=text_content,
-                    file_bytes=file_bytes,
-                )
+            try:
+                with st.spinner(f"Extracting content, uploading blob, & generating embeddings for '{filename}'..."):
+                    ingest_res = rag.ingest_document(
+                        workspace_id=active_ws_id,
+                        filename=filename,
+                        file_bytes=file_bytes,
+                    )
 
-            if ingest_res.already_exists:
-                st.info(f"ℹ️ **Already Ingested:** {ingest_res.message}")
-            else:
-                st.success(f"✅ **Success:** {ingest_res.message}")
-                st.rerun()
+                if ingest_res.already_exists:
+                    st.info(f"ℹ️ **Already Ingested:** {ingest_res.message}")
+                else:
+                    st.success(f"✅ **Success:** {ingest_res.message}")
+                    st.rerun()
+            except Exception as err:
+                st.error(f"❌ Ingestion failed for '{filename}': {err}")
 
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -60,7 +62,7 @@ def render_documents_tab(active_ws_id: str, active_ws_name: str) -> None:
     docs = repository.get_workspace_documents(active_ws_id)
 
     if not docs:
-        st.info("No documents uploaded yet to this workspace. Upload a `.txt` or `.md` file above to begin!")
+        st.info("No documents uploaded yet to this workspace. Upload a `.txt`, `.md`, or `.pdf` file above to begin!")
     else:
         st.markdown(f"**Total Documents:** {len(docs)}")
         for doc in docs:
@@ -74,31 +76,44 @@ def render_documents_tab(active_ws_id: str, active_ws_name: str) -> None:
                 else str(created_at)
             )
 
-            with st.expander(f"📄 {filename} — (Uploaded: {created_str})", expanded=False):
+            is_pdf = filename.lower().endswith(".pdf")
+            icon = "📕" if is_pdf else "📄"
+
+            with st.expander(f"{icon} {filename} — (Uploaded: {created_str})", expanded=False):
                 col_meta, col_actions = st.columns([3, 1])
 
                 with col_meta:
                     st.markdown(f"**Storage Path:** `{blob_path}`")
                     st.markdown(f"**Document ID:** `{doc_id}`")
+                    st.markdown(f"**Type:** `{'PDF Document' if is_pdf else 'Text Document'}`")
 
                 try:
-                    # Download preview from Neon Object Storage
-                    file_content = storage.get_file_from_blob(blob_path)
+                    # Download original binary/text from Neon Object Storage
+                    raw_bytes = storage.get_file_bytes_from_blob(blob_path)
+                    mime_type = "application/pdf" if is_pdf else "text/plain"
 
                     with col_actions:
                         st.download_button(
                             label="⬇️ Download File",
-                            data=file_content,
+                            data=raw_bytes,
                             file_name=filename,
-                            mime="text/plain",
+                            mime=mime_type,
                             key=f"dl_{doc_id}",
                             use_container_width=True,
                         )
 
                     st.markdown("**Content Preview:**")
+                    if is_pdf:
+                        try:
+                            preview_text = rag.extract_text_from_pdf(raw_bytes)
+                        except Exception:
+                            preview_text = "[PDF binary file - unable to extract text preview]"
+                    else:
+                        preview_text = raw_bytes.decode("utf-8", errors="replace")
+
                     st.text_area(
                         "Preview",
-                        value=file_content[:2000] + ("\n... [Truncated]" if len(file_content) > 2000 else ""),
+                        value=preview_text[:2000] + ("\n... [Truncated]" if len(preview_text) > 2000 else ""),
                         height=180,
                         disabled=True,
                         key=f"preview_{doc_id}",

@@ -6,17 +6,63 @@ and read-only context formatting to defend against prompt injection.
 """
 
 import hashlib
+import io
 from typing import Any, Sequence
 from langchain_core.documents import Document
-# from langchain_core.vectorstores import VectorStoreRetriever
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_postgres.vectorstores import PGVector
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from pypdf import PdfReader
 
 from src.core.config import get_gemini_api_key, get_psycopg_database_url
 from src.core.models import IngestionResult, RetrievedChunk, RetrievedContext
 from src.database import repository
 from src.services.storage import upload_file_to_blob
+
+
+# ==============================================================================
+# Text Extraction Helpers (TXT, MD, PDF)
+# ==============================================================================
+
+
+def extract_text_from_pdf(file_bytes: bytes) -> str:
+    """
+    Extracts text content from a PDF file byte stream using pypdf.
+
+    Args:
+        file_bytes: Raw binary bytes of the PDF.
+
+    Returns:
+        Extracted text formatted with page headings.
+    """
+    reader = PdfReader(io.BytesIO(file_bytes))
+    extracted_pages: list[str] = []
+    for idx, page in enumerate(reader.pages):
+        text = page.extract_text() or ""
+        if text.strip():
+            extracted_pages.append(f"--- Page {idx + 1} ---\n{text.strip()}")
+
+    if not extracted_pages:
+        raise ValueError("The uploaded PDF does not contain extractable text (it may be scanned or empty).")
+
+    return "\n\n".join(extracted_pages)
+
+
+def extract_text_from_file(filename: str, file_bytes: bytes) -> str:
+    """
+    Extracts text from uploaded file bytes according to file extension (.txt, .md, .pdf).
+
+    Args:
+        filename: Name of the file with extension.
+        file_bytes: Raw binary bytes of the file.
+
+    Returns:
+        Extracted string content of the document.
+    """
+    ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
+    if ext == "pdf":
+        return extract_text_from_pdf(file_bytes)
+    return file_bytes.decode("utf-8", errors="replace")
 
 
 # ==============================================================================
@@ -199,19 +245,28 @@ def format_documents_as_readonly_blocks(
 def ingest_document(
     workspace_id: str,
     filename: str,
-    text_content: str,
+    text_content: str | None = None,
     file_bytes: bytes | None = None,
 ) -> IngestionResult:
     """
-    Ingests a document into the given workspace with strict tenancy boundaries using LangChain PGVector:
-    1. Calculates SHA-256 hash of text_content for idempotency.
-    2. Checks if (workspace_id, file_hash) exists in documents. Returns early if already present.
-    3. Uploads file to Neon Object Storage via storage.upload_file_to_blob.
-    4. Inserts document record into documents table with blob_path.
-    5. Creates LangChain Document with tenancy metadata (workspace_id, document_id, filename).
-    6. Splits document using RecursiveCharacterTextSplitter into chunks.
-    7. Stores vectors in PostgreSQL using LangChain's PGVector with psycopg.
+    Ingests a document (.txt, .md, or .pdf) into the given workspace with strict tenancy boundaries using LangChain PGVector:
+    1. Extracts text from file_bytes or uses text_content.
+    2. Calculates SHA-256 hash of extracted text for idempotency.
+    3. Checks if (workspace_id, file_hash) exists in documents. Returns early if already present.
+    4. Uploads raw file_bytes to Neon Object Storage via storage.upload_file_to_blob.
+    5. Inserts document record into documents table with blob_path.
+    6. Creates LangChain Document with tenancy metadata (workspace_id, document_id, filename).
+    7. Splits document using RecursiveCharacterTextSplitter into chunks.
+    8. Stores vectors in PostgreSQL using LangChain's PGVector with psycopg.
     """
+    if file_bytes is None and text_content is not None:
+        file_bytes = text_content.encode("utf-8")
+    elif file_bytes is not None and not text_content:
+        text_content = extract_text_from_file(filename, file_bytes)
+
+    if not text_content or not text_content.strip():
+        raise ValueError(f"No extractable text found in '{filename}'.")
+
     # 1. Calculate SHA-256 hash of text_content for idempotency
     file_hash = hashlib.sha256(text_content.encode("utf-8")).hexdigest()
 
