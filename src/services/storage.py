@@ -101,3 +101,32 @@ def delete_file_from_blob(blob_path: str) -> bool:
     except Exception as e:
         print(f"Warning: Failed to delete object at {blob_path}: {e}")
         return False
+
+
+def delete_workspace_blobs(workspace_id: str) -> int:
+    """
+    Deletes all files and objects in Neon Object Storage belonging to a workspace.
+
+    Args:
+        workspace_id: The ID of the workspace.
+
+    Returns:
+        int: Number of deleted objects.
+    """
+    try:
+        client, bucket_name = _get_s3_client()
+        prefix = f"workspaces/{workspace_id}/"
+        deleted_count = 0
+        paginator = client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+            objects = page.get("Contents", [])
+            for obj in objects:
+                try:
+                    client.delete_object(Bucket=bucket_name, Key=obj["Key"])
+                    deleted_count += 1
+                except Exception:
+                    pass
+        return deleted_count
+    except Exception as e:
+        print(f"Warning: Failed to delete workspace blobs for {workspace_id}: {e}")
+        return 0

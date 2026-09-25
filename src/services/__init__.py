@@ -7,6 +7,7 @@ from src.services.storage import (
     get_file_from_blob,
     get_file_bytes_from_blob,
     delete_file_from_blob,
+    delete_workspace_blobs,
 )
 from src.services.rag import (
     extract_text_from_pdf,
@@ -20,6 +21,7 @@ from src.services.rag import (
     retrieve_workspace_chunks,
     ingest_document,
     delete_document,
+    delete_workspace_pipeline,
 )
 
 __all__ = [
@@ -27,6 +29,7 @@ __all__ = [
     "get_file_from_blob",
     "get_file_bytes_from_blob",
     "delete_file_from_blob",
+    "delete_workspace_blobs",
     "extract_text_from_pdf",
     "extract_text_from_file",
     "get_embeddings_model",
@@ -38,4 +41,5 @@ __all__ = [
     "retrieve_workspace_chunks",
     "ingest_document",
     "delete_document",
+    "delete_workspace_pipeline",
 ]

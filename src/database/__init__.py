@@ -5,7 +5,11 @@ Database package for PostgreSQL connection, pgvector registration, and tenancy-i
 from src.database.connection import get_db_connection
 from src.database import repository
 from src.database.auth import signup_user, login_user
-from src.database.workspaces import get_user_workspaces, create_workspace
+from src.database.workspaces import (
+    get_user_workspaces,
+    create_workspace,
+    delete_workspace,
+)
 from src.database.documents import (
     get_workspace_documents,
     check_document_hash_exists,
@@ -22,6 +26,7 @@ __all__ = [
     "login_user",
     "get_user_workspaces",
     "create_workspace",
+    "delete_workspace",
     "get_workspace_documents",
     "check_document_hash_exists",
     "save_document_metadata",
