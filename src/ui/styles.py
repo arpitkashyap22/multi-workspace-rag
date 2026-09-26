@@ -93,6 +93,82 @@ def apply_custom_styles() -> None:
             margin-top: 6px;
         }
 
+        /* Smooth scrolling on main viewport */
+        [data-testid="stMain"] {
+            scroll-behavior: smooth !important;
+        }
+
+        /* Fixed Pinned Chat Bottom Area (Gemini / ChatGPT floating effect) */
+        [data-testid="stBottom"] {
+            background: transparent !important;
+        }
+
+        [data-testid="stBottom"] > div {
+            background: linear-gradient(180deg, rgba(13, 16, 23, 0) 0%, rgba(13, 16, 23, 0.82) 28%, rgba(13, 16, 23, 0.98) 55%, rgba(13, 16, 23, 1) 100%) !important;
+            backdrop-filter: blur(12px) !important;
+            -webkit-backdrop-filter: blur(12px) !important;
+            padding-top: 1.25rem !important;
+            padding-bottom: 0.75rem !important;
+        }
+
+        [data-testid="stBottomBlockContainer"] {
+            padding-bottom: 0.5rem !important;
+        }
+
+        /* Fixed Chat Input Styling - Gemini Pill Container */
+        [data-testid="stChatInput"] {
+            border-radius: 28px !important;
+            background: rgba(24, 29, 39, 0.92) !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45) !important;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+        }
+
+        [data-testid="stChatInput"]:focus-within {
+            border-color: #8ab4f8 !important;
+            box-shadow: 0 0 0 2px rgba(138, 180, 248, 0.25), 0 10px 32px rgba(0, 0, 0, 0.55) !important;
+        }
+
+        [data-testid="stChatInput"] textarea {
+            font-size: 0.95rem !important;
+            color: #f1f3f4 !important;
+        }
+
+        [data-testid="stChatInput"] textarea::placeholder {
+            color: #9aa0a6 !important;
+        }
+
+        /* Floating Scroll-to-Bottom Button */
+        .gemini-scroll-btn {
+            position: fixed;
+            bottom: 95px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: rgba(30, 36, 48, 0.92);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            color: #e8eaed;
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .gemini-scroll-btn:hover {
+            background: rgba(45, 55, 75, 0.95);
+            border-color: #8ab4f8;
+            color: #8ab4f8;
+            transform: translateX(-50%) translateY(-2px);
+            box-shadow: 0 6px 20px rgba(66, 133, 244, 0.35);
+        }
+
         /* Metric Cards */
         .metric-card {
             background: rgba(22, 27, 34, 0.6);

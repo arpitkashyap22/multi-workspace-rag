@@ -11,22 +11,34 @@ from src.services.rag.embeddings import get_embeddings_model
 
 
 @st.cache_resource(show_spinner=False)
-def get_vector_store(collection_name: str = "workspace_documents") -> PGVector:
-    """
-    Returns an initialized, cached LangChain PGVector instance connected to PostgreSQL
-    via the modern psycopg driver and SQLAlchemy integration.
-    """
+def ensure_vector_tables_exist(collection_name: str = "workspace_documents") -> None:
+    """Ensures vector store tables and schemas are initialized once per application lifetime."""
     embeddings = get_embeddings_model()
     connection_url = get_psycopg_database_url()
-
-    vector_store = PGVector(
+    vs = PGVector(
         embeddings=embeddings,
         connection=connection_url,
         collection_name=collection_name,
         use_jsonb=True,
     )
-    vector_store.create_tables_if_not_exists()
-    return vector_store
+    vs.create_tables_if_not_exists()
+
+
+@st.cache_resource(show_spinner=False)
+def get_vector_store(collection_name: str = "workspace_documents") -> PGVector:
+    """
+    Returns an initialized, cached LangChain PGVector instance connected to PostgreSQL
+    via the modern psycopg driver and SQLAlchemy integration without redundant table DDL checks.
+    """
+    embeddings = get_embeddings_model()
+    connection_url = get_psycopg_database_url()
+
+    return PGVector(
+        embeddings=embeddings,
+        connection=connection_url,
+        collection_name=collection_name,
+        use_jsonb=True,
+    )
 
 
 def delete_document_embeddings(workspace_id: str, document_id: str) -> int:

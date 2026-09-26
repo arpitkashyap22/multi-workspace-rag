@@ -160,6 +160,8 @@ def render_chat_tab(active_ws_id: str, active_ws_name: str) -> None:
                 if st.button("Broadcast Alert →", key="card_prompt_4", width="stretch"):
                     chosen_prompt = "Send an operational alert to Discord that workspace review is in progress."
 
+        st.html("<div style='height: 100px; width: 100%;'></div>")
+
     else:
         # Render Chat History (Gemini Style)
         for msg in messages:
@@ -183,11 +185,123 @@ def render_chat_tab(active_ws_id: str, active_ws_name: str) -> None:
                         unsafe_allow_html=True,
                     )
 
-    # 4. Gemini Chat Input
-    input_query = st.chat_input(f"Ask Gemini about {active_ws_name}...", submit_mode="disable")
+    # 4. Render bottom spacer and auto-scroll anchor so messages don't get hidden behind the pinned input bar
+    if messages:
+        st.html(
+            """
+            <div id="chat-bottom-anchor" style="height: 120px; width: 100%; clear: both;"></div>
+            <div id="chat-scroll-container">
+                <button id="gemini-scroll-btn" class="gemini-scroll-btn" title="Scroll to bottom" aria-label="Scroll to bottom">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </button>
+            </div>
+            <script>
+            (function() {
+                function findScrollContainer() {
+                    return document.querySelector('[data-testid="stMain"]') || document.querySelector('section.main') || document.documentElement;
+                }
+
+                function doScrollToBottom(smooth = true) {
+                    const anchor = document.getElementById("chat-bottom-anchor");
+                    if (anchor) {
+                        anchor.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "end" });
+                    }
+                    const container = findScrollContainer();
+                    if (container) {
+                        container.scrollTo({ top: container.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+                    }
+                    window.scrollTo({ top: document.body.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+                }
+
+                window.__geminiDoScroll = doScrollToBottom;
+
+                // Perform smooth scroll to bottom after layout settles
+                requestAnimationFrame(() => doScrollToBottom(true));
+                setTimeout(() => doScrollToBottom(true), 80);
+                setTimeout(() => doScrollToBottom(true), 250);
+
+                const btn = document.getElementById("gemini-scroll-btn");
+                const container = findScrollContainer();
+                let userScrolledUp = false;
+
+                function checkScroll() {
+                    const anchor = document.getElementById("chat-bottom-anchor");
+                    if (!anchor || !btn) return;
+                    const scrollDist = container.scrollHeight - container.scrollTop - container.clientHeight;
+                    if (scrollDist > 140) {
+                        userScrolledUp = true;
+                        btn.style.display = "flex";
+                    } else {
+                        userScrolledUp = false;
+                        btn.style.display = "none";
+                    }
+                }
+
+                if (btn) {
+                    btn.onclick = function(e) {
+                        e.preventDefault();
+                        userScrolledUp = false;
+                        doScrollToBottom(true);
+                        btn.style.display = "none";
+                    };
+                }
+
+                if (container && !container.__hasChatScroll) {
+                    container.__hasChatScroll = true;
+                    container.addEventListener("scroll", checkScroll, { passive: true });
+                }
+                window.addEventListener("scroll", checkScroll, { passive: true });
+
+                // MutationObserver for auto-scrolling when new messages or thought steps are added
+                const mainEl = document.querySelector('[data-testid="stMain"]') || document.body;
+                if (mainEl && !window.__geminiChatObserver) {
+                    window.__geminiChatObserver = new MutationObserver(function() {
+                        const anchor = document.getElementById("chat-bottom-anchor");
+                        if (!anchor) return;
+                        if (!userScrolledUp) {
+                            doScrollToBottom(true);
+                        }
+                    });
+                    window.__geminiChatObserver.observe(mainEl, {
+                        childList: true,
+                        subtree: true
+                    });
+                }
+            })();
+            </script>
+            """,
+            unsafe_allow_javascript=True,
+        )
+
+    # 5. Fixed Gemini Chat Input (Pinned to viewport bottom)
+    with st.bottom:
+        input_query = st.chat_input(
+            f"Ask Gemini about {active_ws_name}...",
+            submit_mode="disable",
+            key="gemini_chat_input",
+        )
     user_query = chosen_prompt or input_query
 
     if user_query:
+        # 1. Mount screen freeze overlay to block UI interactions while generating solution
+        freeze_overlay = st.empty()
+        freeze_overlay.spinner("Generating solution...")
+
+
+        # Trigger immediate scroll to bottom when a query is submitted
+        st.html(
+            """
+            <script>
+            if (window.__geminiDoScroll) {
+                window.__geminiDoScroll(true);
+            }
+            </script>
+            """,
+            unsafe_allow_javascript=True,
+        )
+
         # Save user message to database
         repository.save_chat_message(
             conversation_id=current_conv_id,
@@ -279,4 +393,18 @@ def render_chat_tab(active_ws_id: str, active_ws_name: str) -> None:
                         content=err_msg,
                     )
 
+        # Clear freeze overlay before refreshing page
+        freeze_overlay.empty()
+
+        # Trigger scroll to bottom for the newly completed answer before rerun
+        st.html(
+            """
+            <script>
+            if (window.__geminiDoScroll) {
+                window.__geminiDoScroll(true);
+            }
+            </script>
+            """,
+            unsafe_allow_javascript=True,
+        )
         st.rerun()
