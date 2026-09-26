@@ -285,11 +285,6 @@ def render_chat_tab(active_ws_id: str, active_ws_name: str) -> None:
     user_query = chosen_prompt or input_query
 
     if user_query:
-        # 1. Mount screen freeze overlay to block UI interactions while generating solution
-        freeze_overlay = st.empty()
-        freeze_overlay.spinner("Generating solution...")
-
-
         # Trigger immediate scroll to bottom when a query is submitted
         st.html(
             """
@@ -392,9 +387,6 @@ def render_chat_tab(active_ws_id: str, active_ws_name: str) -> None:
                         role="assistant",
                         content=err_msg,
                     )
-
-        # Clear freeze overlay before refreshing page
-        freeze_overlay.empty()
 
         # Trigger scroll to bottom for the newly completed answer before rerun
         st.html(
