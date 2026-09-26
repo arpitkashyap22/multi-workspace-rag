@@ -11,6 +11,7 @@ from src.core.models import IngestionResult, RetrievedContext
 from src.database.documents import (
     check_document_hash_exists,
     save_document_metadata,
+    get_workspace_documents,
     delete_document as db_delete_document,
 )
 from src.database.workspaces import delete_workspace as db_delete_workspace
@@ -129,6 +130,12 @@ def retrieve_workspace_chunks(
        LangChain PGVector automatically embeds the query and runs cosine similarity in PostgreSQL.
     2. Formats retrieved chunks as read-only data blocks to mitigate prompt injection.
     """
+    # Quick check: does this workspace contain any documents?
+    # If 0 documents exist, skip the network embedding call and vector search
+    docs = get_workspace_documents(workspace_id)
+    if not docs:
+        return format_documents_as_readonly_blocks([])
+
     vectorstore = get_vector_store()
 
     # Query PGVector store directly with automatic embedding and workspace filtering

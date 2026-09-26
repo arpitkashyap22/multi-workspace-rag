@@ -161,12 +161,16 @@ def delete_conversation(conversation_id: str, workspace_id: str) -> bool:
                 get_workspace_conversations.clear()
             except Exception:
                 pass
+            try:
+                get_conversation_messages.clear()
+            except Exception:
+                pass
             return deleted
 
 
+@st.cache_data(ttl="60s", max_entries=100, show_spinner=False)
 def get_conversation_messages(conversation_id: str) -> list[dict[str, Any]]:
-    """Retrieve all messages in a conversation ordered chronologically."""
-    init_chat_tables()
+    """Retrieve all messages in a conversation ordered chronologically (cached for fast reruns)."""
     with get_db_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
@@ -200,8 +204,8 @@ def save_chat_message(
 ) -> dict[str, Any]:
     """
     Save a message (user or assistant) to chat_messages and update the conversation's updated_at timestamp.
+    Invalidates conversation and message caches.
     """
-    init_chat_tables()
     sources_json = json.dumps(sources or [])
     with get_db_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
@@ -230,6 +234,11 @@ def save_chat_message(
 
             try:
                 get_workspace_conversations.clear()
+            except Exception:
+                pass
+
+            try:
+                get_conversation_messages.clear()
             except Exception:
                 pass
 
