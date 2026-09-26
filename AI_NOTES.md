@@ -120,6 +120,10 @@ User Question: {user_query}
    - Expand document ingestion beyond `.txt`, `.md`, and `.pdf` to support tabular data (`.xlsx`, `.csv`) and office documents (`.docx`, `.pptx`).
    - Add multimodal parsing using Gemini's native vision capabilities (or OCR via `pytesseract`) to extract data from scanned PDFs, architecture diagrams, and infographic images.
 
-5. **Observability & Tracing:**
+5. **Provide Memory:**
+    - Save previous conversation with the help of conversation id 
+    - Pass the full conversation to the agent while generating response 
+
+6. **Observability & Tracing:**
    - Integrate **LangSmith** or **OpenTelemetry** to trace agent execution lifecycles end-to-end.
    - Monitor per-step latency, token costs, vector retrieval scores, and tool failure rates to debug hallucination triggers and model drift in real time.
