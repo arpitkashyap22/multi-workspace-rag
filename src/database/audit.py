@@ -5,6 +5,7 @@ Handles logging and retrieval of tool execution records strictly scoped by works
 
 import json
 from typing import Any
+import streamlit as st
 from psycopg.rows import dict_row
 from src.database.connection import get_db_connection
 
@@ -28,12 +29,19 @@ def log_tool_execution(
                     """,
                     (workspace_id, tool_name, json.dumps(arguments), status),
                 )
+                conn.commit()
+
+        try:
+            get_tool_logs.clear()
+        except Exception:
+            pass
     except Exception as e:
         print(f"Warning: Failed to write to tool_logs: {e}")
 
 
+@st.cache_data(ttl="15s", max_entries=50, show_spinner=False)
 def get_tool_logs(workspace_id: str) -> list[dict[str, Any]]:
-    """Retrieve tool execution logs for the active workspace."""
+    """Retrieve tool execution logs for the active workspace (cached for fast dashboard render)."""
     with get_db_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(

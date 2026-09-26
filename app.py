@@ -51,16 +51,21 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Tabs Interface
+# Tabs Interface (Dynamic with on_change='rerun' to prevent inactive tabs from executing)
 tab_chat, tab_docs, tab_dashboard = st.tabs(
-    ["💬 Assistant", "📁 Documents", "📊 Dashboard & Logs"]
+    ["💬 Assistant", "📁 Documents", "📊 Dashboard & Logs"],
+    on_change="rerun",
+    key="main_nav_tabs",
 )
 
-with tab_chat:
-    render_chat_tab(active_ws_id, active_ws_name)
+if tab_chat.open:
+    with tab_chat:
+        render_chat_tab(active_ws_id, active_ws_name)
 
-with tab_docs:
-    render_documents_tab(active_ws_id, active_ws_name)
+if tab_docs.open:
+    with tab_docs:
+        render_documents_tab(active_ws_id, active_ws_name)
 
-with tab_dashboard:
-    render_dashboard_tab(active_ws_id, active_ws_name)
+if tab_dashboard.open:
+    with tab_dashboard:
+        render_dashboard_tab(active_ws_id, active_ws_name)

@@ -4,12 +4,14 @@ Handles workspace CRUD operations scoped by user_id.
 """
 
 from typing import Any
+import streamlit as st
 from psycopg.rows import dict_row
 from src.database.connection import get_db_connection
 
 
+@st.cache_data(ttl="30s", max_entries=50, show_spinner=False)
 def get_user_workspaces(user_id: str) -> list[dict[str, Any]]:
-    """Retrieve all workspaces belonging to a user."""
+    """Retrieve all workspaces belonging to a user (cached for fast sidebar rendering)."""
     with get_db_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
@@ -29,7 +31,7 @@ def get_user_workspaces(user_id: str) -> list[dict[str, Any]]:
 
 
 def create_workspace(user_id: str, name: str) -> dict[str, Any]:
-    """Create a new workspace for a user."""
+    """Create a new workspace for a user and clear workspace cache."""
     with get_db_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
@@ -39,6 +41,13 @@ def create_workspace(user_id: str, name: str) -> dict[str, Any]:
             row = cur.fetchone()
             if not row:
                 raise RuntimeError(f"Failed to create workspace '{name}': no row returned")
+
+            # Clear cache
+            try:
+                get_user_workspaces.clear()
+            except Exception:
+                pass
+
             return {
                 "id": str(row["id"]),
                 "user_id": row["user_id"],
@@ -66,6 +75,13 @@ def delete_workspace(user_id: str, workspace_id: str) -> dict[str, Any] | None:
             row = cur.fetchone()
             if not row:
                 return None
+
+            # Clear cache
+            try:
+                get_user_workspaces.clear()
+            except Exception:
+                pass
+
             return {
                 "id": str(row["id"]),
                 "user_id": str(row["user_id"]),

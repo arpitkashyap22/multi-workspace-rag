@@ -4,12 +4,14 @@ Handles document record metadata and idempotency checks strictly scoped by works
 """
 
 from typing import Any
+import streamlit as st
 from psycopg.rows import dict_row
 from src.database.connection import get_db_connection
 
 
+@st.cache_data(ttl="30s", max_entries=50, show_spinner=False)
 def get_workspace_documents(workspace_id: str) -> list[dict[str, Any]]:
-    """Retrieve all document records for a workspace."""
+    """Retrieve all document records for a workspace (cached for rapid tab rendering)."""
     with get_db_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
@@ -72,6 +74,13 @@ def save_document_metadata(
             doc_row = cur.fetchone()
             if not doc_row:
                 raise RuntimeError(f"Failed to save document metadata for '{filename}': no row returned")
+
+            # Clear cached document list
+            try:
+                get_workspace_documents.clear()
+            except Exception:
+                pass
+
             return str(doc_row[0])
 
 
@@ -99,6 +108,13 @@ def delete_document(workspace_id: str, document_id: str) -> dict[str, Any] | Non
                 "DELETE FROM document_chunks WHERE document_id = %s AND workspace_id = %s;",
                 (document_id, workspace_id),
             )
+
+            # Clear cached document list
+            try:
+                get_workspace_documents.clear()
+            except Exception:
+                pass
+
             return {
                 "id": str(deleted["id"]),
                 "filename": deleted["filename"],

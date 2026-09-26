@@ -5,6 +5,7 @@ workspace-scoped tool binding, and ReAct agent execution following SOLID princip
 """
 
 from typing import Any, Generator
+import streamlit as st
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.agents import create_agent
 
@@ -12,6 +13,17 @@ from src.core.config import get_gemini_api_key, get_chat_model
 from src.core.models import AgentToolEvent, AgentResponse, RetrievedContext
 from src.services import rag
 from src.agents import tools
+
+
+@st.cache_resource(show_spinner=False)
+def get_chat_model_instance(model_name: str, temperature: float, api_key: str) -> ChatGoogleGenerativeAI:
+    """Creates or returns a cached ChatGoogleGenerativeAI instance."""
+    return ChatGoogleGenerativeAI(
+        model=model_name,
+        api_key=api_key,
+        temperature=temperature,
+        max_retries=2,
+    )
 
 
 def _extract_text(content: object) -> str:
@@ -55,12 +67,7 @@ class DocumentAssistantAgent:
                 "Gemini API key is not configured. Please set GEMINI_API_KEY in environment or .streamlit/secrets.toml."
             )
 
-        self.llm = ChatGoogleGenerativeAI(
-            model=self.model_name,
-            api_key=self.api_key,
-            temperature=self.temperature,
-            max_retries=2,
-        )
+        self.llm = get_chat_model_instance(self.model_name, self.temperature, self.api_key)
 
     def _build_system_prompt(self, retrieved_context: RetrievedContext) -> str:
         """
@@ -113,8 +120,23 @@ class DocumentAssistantAgent:
             system_prompt=system_prompt,
         )
 
-        # 5. Assemble messages input
-        messages = [{"role": "user", "content": query}]
+        # 5. Assemble messages input with conversational memory
+        messages: list[dict[str, str]] = []
+        if chat_history:
+            # Pass up to the last 12 messages for rich multi-turn context
+            for msg in chat_history[-12:]:
+                role = msg.get("role")
+                content = msg.get("content", "")
+                if not content:
+                    continue
+                if role in ("user", "human"):
+                    messages.append({"role": "user", "content": content})
+                elif role in ("assistant", "ai"):
+                    messages.append({"role": "assistant", "content": content})
+
+        # Append current user query if it is not already the trailing message
+        if not messages or messages[-1].get("content") != query or messages[-1].get("role") != "user":
+            messages.append({"role": "user", "content": query})
 
         # 6. Execute agent graph
         result = agent.invoke({"messages": messages})

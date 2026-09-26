@@ -4,15 +4,17 @@ Manages Google Generative AI embeddings configuration and document segmentation.
 """
 
 from typing import Any, Sequence
+import streamlit as st
 from langchain_core.documents import Document
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from src.core.config import get_gemini_api_key
 
 
+@st.cache_resource(show_spinner=False)
 def get_embeddings_model() -> GoogleGenerativeAIEmbeddings:
     """
-    Initializes LangChain's GoogleGenerativeAIEmbeddings configured
+    Initializes and caches LangChain's GoogleGenerativeAIEmbeddings configured
     for 768-dimensional vectors matching the PostgreSQL pgvector schema.
     """
     api_key = get_gemini_api_key()

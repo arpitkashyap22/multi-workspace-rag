@@ -120,9 +120,11 @@ User Question: {user_query}
    - Expand document ingestion beyond `.txt`, `.md`, and `.pdf` to support tabular data (`.xlsx`, `.csv`) and office documents (`.docx`, `.pptx`).
    - Add multimodal parsing using Gemini's native vision capabilities (or OCR via `pytesseract`) to extract data from scanned PDFs, architecture diagrams, and infographic images.
 
-5. **Provide Memory:**
-    - Save previous conversation with the help of conversation id 
-    - Pass the full conversation to the agent while generating response 
+5. **Provide Memory (Implemented ✅):**
+    - Built persistent conversation threads (`conversations` table) with UUID `conversation_id` scoped to workspaces.
+    - Stored individual turns in `chat_messages` with roles, content, and source citations.
+    - Passed multi-turn conversation history directly into the LangChain agent graph for contextual conversational memory.
+    - Integrated conversation switcher, new thread creation, and thread deletion with alert modals in the UI. 
 
 6. **Observability & Tracing:**
    - Integrate **LangSmith** or **OpenTelemetry** to trace agent execution lifecycles end-to-end.
