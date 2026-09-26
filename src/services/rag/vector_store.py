@@ -3,15 +3,17 @@ LangChain PostgreSQL Vector Store module.
 Provides PGVector initialization and configuration powered by psycopg (v3).
 """
 
+import streamlit as st
 from langchain_postgres.vectorstores import PGVector
 from src.core.config import get_psycopg_database_url
 from src.database.connection import get_db_connection
 from src.services.rag.embeddings import get_embeddings_model
 
 
+@st.cache_resource(show_spinner=False)
 def get_vector_store(collection_name: str = "workspace_documents") -> PGVector:
     """
-    Returns an initialized LangChain PGVector instance connected to PostgreSQL
+    Returns an initialized, cached LangChain PGVector instance connected to PostgreSQL
     via the modern psycopg driver and SQLAlchemy integration.
     """
     embeddings = get_embeddings_model()

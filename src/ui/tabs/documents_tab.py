@@ -9,6 +9,24 @@ from src.database import repository
 from src.services import rag, storage
 
 
+@st.cache_data(ttl="1h", max_entries=50, show_spinner=False)
+def get_cached_file_bytes(blob_path: str) -> bytes:
+    """Download and cache raw file bytes from Neon Object Storage."""
+    return storage.get_file_bytes_from_blob(blob_path)
+
+
+@st.cache_data(ttl="1h", max_entries=50, show_spinner=False)
+def get_cached_document_preview(blob_path: str, is_pdf: bool) -> str:
+    """Extract and cache preview text to avoid expensive re-parsing on every rerun."""
+    try:
+        raw_bytes = get_cached_file_bytes(blob_path)
+        if is_pdf:
+            return rag.extract_text_from_pdf(raw_bytes)
+        return raw_bytes.decode("utf-8", errors="replace")
+    except Exception as err:
+        return f"[Unable to extract preview: {err}]"
+
+
 @st.dialog("Delete Document Confirmation")
 def confirm_delete_dialog(workspace_id: str, document_id: str, filename: str) -> None:
     """
@@ -34,6 +52,8 @@ def confirm_delete_dialog(workspace_id: str, document_id: str, filename: str) ->
             with st.spinner(f"Deleting '{filename}' and associated vector embeddings..."):
                 try:
                     res = rag.delete_document(workspace_id=workspace_id, document_id=document_id)
+                    get_cached_file_bytes.clear()
+                    get_cached_document_preview.clear()
                     st.toast(res.get("message", f"Deleted {filename}"), icon="🗑️")
                     st.rerun()
                 except Exception as err:
@@ -82,7 +102,9 @@ def render_documents_tab(active_ws_id: str, active_ws_name: str) -> None:
                 if ingest_res.already_exists:
                     st.info(f"ℹ️ **Already Ingested:** {ingest_res.message}")
                 else:
-                    st.success(f"✅ **Success:** {ingest_res.message}")
+                    get_cached_file_bytes.clear()
+                    get_cached_document_preview.clear()
+                    st.toast(f"Ingested '{filename}' ({ingest_res.chunk_count} chunks)", icon="✅")
                     st.rerun()
             except Exception as err:
                 st.error(f"❌ Ingestion failed for '{filename}': {err}")
@@ -119,8 +141,7 @@ def render_documents_tab(active_ws_id: str, active_ws_name: str) -> None:
                     st.markdown(f"**Type:** `{'PDF Document' if is_pdf else 'Text Document'}`")
 
                 try:
-                    # Download original binary/text from Neon Object Storage
-                    raw_bytes = storage.get_file_bytes_from_blob(blob_path)
+                    raw_bytes = get_cached_file_bytes(blob_path)
                     mime_type = "application/pdf" if is_pdf else "text/plain"
 
                     with col_actions:
@@ -146,15 +167,8 @@ def render_documents_tab(active_ws_id: str, active_ws_name: str) -> None:
                                 filename=filename,
                             )
 
+                    preview_text = get_cached_document_preview(blob_path, is_pdf)
                     st.markdown("**Content Preview:**")
-                    if is_pdf:
-                        try:
-                            preview_text = rag.extract_text_from_pdf(raw_bytes)
-                        except Exception:
-                            preview_text = "[PDF binary file - unable to extract text preview]"
-                    else:
-                        preview_text = raw_bytes.decode("utf-8", errors="replace")
-
                     st.text_area(
                         "Preview",
                         value=preview_text[:2000] + ("\n... [Truncated]" if len(preview_text) > 2000 else ""),

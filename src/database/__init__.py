@@ -18,6 +18,16 @@ from src.database.documents import (
 )
 from src.database.tasks import save_task, get_workspace_tasks
 from src.database.audit import log_tool_execution, get_tool_logs
+from src.database.conversations import (
+    get_workspace_conversations,
+    create_conversation,
+    get_conversation,
+    update_conversation_title,
+    delete_conversation,
+    get_conversation_messages,
+    save_chat_message,
+    clear_conversation_messages,
+)
 
 __all__ = [
     "get_db_connection",
@@ -35,4 +45,12 @@ __all__ = [
     "get_workspace_tasks",
     "log_tool_execution",
     "get_tool_logs",
+    "get_workspace_conversations",
+    "create_conversation",
+    "get_conversation",
+    "update_conversation_title",
+    "delete_conversation",
+    "get_conversation_messages",
+    "save_chat_message",
+    "clear_conversation_messages",
 ]

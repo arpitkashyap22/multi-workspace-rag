@@ -45,6 +45,8 @@ def confirm_delete_workspace_dialog(user_id: str, workspace_id: str, workspace_n
                     # Clear chat history in session state for this workspace
                     if "chat_histories" in st.session_state and workspace_id in st.session_state.chat_histories:
                         del st.session_state.chat_histories[workspace_id]
+                    if "active_conversation_id" in st.session_state:
+                        st.session_state.pop("active_conversation_id", None)
 
                     # If the deleted workspace was the active one, update active_workspace_id
                     if st.session_state.get("active_workspace_id") == workspace_id:
@@ -99,6 +101,7 @@ def render_sidebar() -> Tuple[str, str]:
         )
 
         if st.button("🚪 Logout", width="stretch"):
+            st.cache_data.clear()
             st.session_state.clear()
             st.rerun()
 

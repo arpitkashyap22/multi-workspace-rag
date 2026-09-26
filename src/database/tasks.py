@@ -4,6 +4,7 @@ Handles creation and retrieval of tasks strictly scoped by workspace_id.
 """
 
 from typing import Any
+import streamlit as st
 from psycopg.rows import dict_row
 from src.database.connection import get_db_connection
 
@@ -23,6 +24,12 @@ def save_task(workspace_id: str, title: str, priority: str) -> dict[str, Any]:
             row = cur.fetchone()
             if not row:
                 raise RuntimeError(f"Failed to save task '{title}': no row returned")
+
+            try:
+                get_workspace_tasks.clear()
+            except Exception:
+                pass
+
             return {
                 "id": str(row["id"]),
                 "workspace_id": str(row["workspace_id"]),
@@ -32,8 +39,9 @@ def save_task(workspace_id: str, title: str, priority: str) -> dict[str, Any]:
             }
 
 
+@st.cache_data(ttl="15s", max_entries=50, show_spinner=False)
 def get_workspace_tasks(workspace_id: str) -> list[dict[str, Any]]:
-    """Retrieve all tasks belonging to the active workspace."""
+    """Retrieve all tasks belonging to the active workspace (cached for fast dashboard render)."""
     with get_db_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
