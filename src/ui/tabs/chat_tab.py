@@ -1,7 +1,7 @@
 """
 Chat Assistant Tab module.
-Renders workspace-scoped conversational AI interface with persistent multi-turn chat history,
-thread switching, autonomous tool execution, and grounded document citations.
+Renders Gemini-inspired conversational AI interface with persistent multi-turn chat threads,
+rich prompt cards, collapsible thought process, grounded source chips, and tool execution.
 """
 
 import streamlit as st
@@ -38,12 +38,16 @@ def confirm_delete_conversation_dialog(conversation_id: str, workspace_id: str, 
 
 def render_chat_tab(active_ws_id: str, active_ws_name: str) -> None:
     """
-    Renders the Document Assistant chat interface for the active workspace with persistent history.
+    Renders the Gemini-styled Document Assistant chat interface for the active workspace.
 
     Args:
         active_ws_id: UUID of the current active workspace.
         active_ws_name: Display name of the active workspace.
     """
+    current_user = st.session_state.get("user", {})
+    user_email = current_user.get("email", "")
+    user_name = user_email.split("@")[0].capitalize() if user_email else "there"
+
     # 1. Fetch persistent conversations for active workspace
     conversations = repository.get_workspace_conversations(active_ws_id)
     if not conversations:
@@ -63,11 +67,19 @@ def render_chat_tab(active_ws_id: str, active_ws_name: str) -> None:
     current_conv_id = current_conv["id"]
     current_conv_title = current_conv["title"]
 
-    # 2. Top Conversation Thread Control Bar
-    st.markdown("### 💬 Conversational Assistant")
-    st.caption(f"Persistent conversation threads scoped to **{active_ws_name}**.")
+    # 2. Sleek Gemini Top Navigation Bar
+    col_brand, col_sel, col_new, col_del = st.columns([1.6, 2.8, 1.2, 0.6])
+    with col_brand:
+        st.markdown(
+            f"""
+            <div style="display: flex; align-items: center; gap: 8px; height: 100%; padding-top: 4px;">
+                <span style="font-size: 1.25rem;">✨</span>
+                <span style="font-weight: 700; font-size: 1.05rem; background: linear-gradient(90deg, #8ab4f8, #c58af9); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Gemini Assistant</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-    col_sel, col_new, col_del = st.columns([3.5, 1.2, 0.8])
     with col_sel:
         def _format_conv(cid: str) -> str:
             c = conv_map.get(cid)
@@ -102,41 +114,77 @@ def render_chat_tab(active_ws_id: str, active_ws_name: str) -> None:
                 title=current_conv_title,
             )
 
-    st.markdown("<hr style='margin: 0.5rem 0 1rem 0; border: none; border-top: 1px solid rgba(255,255,255,0.08);'>", unsafe_allow_html=True)
+    st.markdown("<hr style='margin: 0.4rem 0 1.25rem 0; border: none; border-top: 1px solid rgba(255,255,255,0.08);'>", unsafe_allow_html=True)
 
     # 3. Retrieve persistent message history for current thread
     messages = repository.get_conversation_messages(current_conv_id)
 
-    # Render Welcome Message and suggestion chips if thread is empty
+    # Render Gemini Hero Welcome & Suggestion Cards if thread is empty
     chosen_prompt: str | None = None
     if not messages:
-        with st.chat_message("assistant"):
-            st.markdown(
-                f"Hello! I am your AI assistant for **{active_ws_name}**.\n\n"
-                "Ask me anything about documents in this workspace, or ask me to record action items or broadcast alerts. "
-                "All conversation history in this thread is persistently saved."
-            )
+        st.markdown(
+            f"""
+            <div style="margin: 1.5rem 0 2rem 0;">
+                <div class="gemini-greeting">Hello, {user_name}</div>
+                <div class="gemini-subheading">How can I help with {active_ws_name} today?</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-        suggestions = [
-            "📄 Summarize documents in this workspace",
-            "📌 Save a high-priority review task",
-            "📢 Send an alert to the team on Discord",
-        ]
-        chosen = st.pills("💡 Suggested actions:", suggestions, key=f"pills_{current_conv_id}")
-        if chosen:
-            chosen_prompt = chosen
+        # Gemini-style 4 prompt suggestion cards in 2x2 grid
+        c1, c2 = st.columns(2)
+        with c1:
+            with st.container(border=True):
+                st.markdown("### 📄 **Summarize Documents**")
+                st.caption("Extract key findings, core takeaways, and high-level summaries from all workspace files.")
+                if st.button("Summarize Workspace →", key="card_prompt_1", width="stretch"):
+                    chosen_prompt = "Please provide an executive summary of all uploaded documents in this workspace."
+
+            with st.container(border=True):
+                st.markdown("### 📌 **Extract Action Items**")
+                st.caption("Identify deliverables or follow-ups and automatically record them as workspace tasks.")
+                if st.button("Extract Tasks →", key="card_prompt_3", width="stretch"):
+                    chosen_prompt = "Identify the key action items and deliverables in this workspace, and save them as tasks."
+
+        with c2:
+            with st.container(border=True):
+                st.markdown("### 🔍 **Deep Q&A & Citations**")
+                st.caption("Ask specific domain questions with exact page and filename source citations.")
+                if st.button("Explore Details →", key="card_prompt_2", width="stretch"):
+                    chosen_prompt = "What are the most critical specifications, requirements, and findings in this workspace?"
+
+            with st.container(border=True):
+                st.markdown("### 📢 **Broadcast Team Alert**")
+                st.caption("Compose an operational status notice and dispatch it directly to Discord.")
+                if st.button("Broadcast Alert →", key="card_prompt_4", width="stretch"):
+                    chosen_prompt = "Send an operational alert to Discord that workspace review is in progress."
+
     else:
-        # Render Chat History
+        # Render Chat History (Gemini Style)
         for msg in messages:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
-                if msg.get("sources"):
-                    with st.expander("📚 Source Citations", expanded=False):
-                        for src in msg["sources"]:
-                            st.markdown(f"- 📄 `{src}`")
+            is_user = (msg["role"] == "user")
+            avatar_icon = ":material/account_circle:" if is_user else "✨"
 
-    # 4. Chat Input & Response Generation
-    input_query = st.chat_input(f"Message assistant in {active_ws_name}...", submit_mode="disable")
+            with st.chat_message(msg["role"], avatar=avatar_icon):
+                st.markdown(msg["content"])
+
+                # Grounded Citations (Gemini Chip Style)
+                sources = msg.get("sources")
+                if sources:
+                    chips_html = "".join([f'<span class="gemini-source-chip">📄 {src}</span>' for src in sources])
+                    st.markdown(
+                        f"""
+                        <div style="margin-top: 10px;">
+                            <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #80868b; margin-bottom: 4px;">Grounded Sources</div>
+                            <div>{chips_html}</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+    # 4. Gemini Chat Input
+    input_query = st.chat_input(f"Ask Gemini about {active_ws_name}...", submit_mode="disable")
     user_query = chosen_prompt or input_query
 
     if user_query:
@@ -154,11 +202,11 @@ def render_chat_tab(active_ws_id: str, active_ws_name: str) -> None:
             repository.update_conversation_title(current_conv_id, short_title)
 
         # Display user message immediately
-        with st.chat_message("user"):
+        with st.chat_message("user", avatar=":material/account_circle:"):
             st.markdown(user_query)
 
         # Run assistant agent with multi-turn conversation memory
-        with st.chat_message("assistant"):
+        with st.chat_message("assistant", avatar="✨"):
             try:
                 doc_agent = DocumentAssistantAgent()
             except ValueError as val_err:
@@ -176,34 +224,43 @@ def render_chat_tab(active_ws_id: str, active_ws_name: str) -> None:
 
             if doc_agent:
                 try:
-                    with st.status(":shimmer[Thinking & searching workspace documents...]", type="compact") as status_box:
+                    # Gemini Thought Process (Compact collapsible cognition container)
+                    with st.status(":material/cognition: Thought process", expanded=True) as status_box:
+                        st.caption(f"Searching semantic vector index for `{active_ws_name}`...")
                         agent_resp = doc_agent.run(
                             workspace_id=active_ws_id,
                             query=user_query,
                             chat_history=messages,
                         )
 
-                        # Display any tool calls executed by the agent inside the compact reasoning block
+                        # Display Tool Executions in Thought Process
                         if agent_resp.tool_events:
                             for event in agent_resp.tool_events:
                                 status_label = "✅ Complete" if event.status == "complete" else "❌ Failed"
-                                st.markdown(f"**Tool:** `{event.tool_name}` — {status_label}")
+                                st.markdown(f"**Tool Invocation:** `{event.tool_name}` — {status_label}")
                                 st.caption(f"Arguments: `{event.tool_args}`")
                                 if event.tool_output:
                                     st.caption(f"Output: `{event.tool_output}`")
                         else:
-                            st.write("Retrieved workspace chunks and synthesized response.")
+                            st.write("Retrieved grounded context chunks and generated structured response.")
 
-                        status_box.update(label="Grounded reasoning complete", state="complete")
+                        status_box.update(label="Thought process complete", state="complete", expanded=False)
 
                     # Display Assistant Answer
                     st.markdown(agent_resp.answer)
 
-                    # Display Sources if available
+                    # Grounded Source Chips
                     if agent_resp.sources:
-                        with st.expander("📚 Source Citations (Active Workspace)", expanded=False):
-                            for src in agent_resp.sources:
-                                st.markdown(f"- 📄 `{src}`")
+                        chips_html = "".join([f'<span class="gemini-source-chip">📄 {src}</span>' for src in agent_resp.sources])
+                        st.markdown(
+                            f"""
+                            <div style="margin-top: 10px;">
+                                <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #80868b; margin-bottom: 4px;">Grounded Sources</div>
+                                <div>{chips_html}</div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
 
                     # Persist assistant message and source citations to database
                     repository.save_chat_message(
