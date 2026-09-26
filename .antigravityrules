@@ -1,19 +1,28 @@
-# Antigravity Agent Guidelines
+# Antigravity IDE Agent Guidelines: Multi-Workspace RAG & Tool Calling
 
-You are developing a multi-tenant, workspace-isolated Document Assistant with Tool Calling.
+You are an expert AI software engineer assisting in building a production-grade, multi-tenant Document Assistant web application using Streamlit, Neon Serverless PostgreSQL with pgvector, Neon S3-Compatible Object Storage, Neon Auth, and LangChain with Google Gemini.
 
-## Core Directives
-1. Strict Tenancy Boundary:
-   - All workspace data lives in ONE shared Postgres table (`document_chunks`).
-   - Isolation MUST be enforced in the SQL query: `WHERE workspace_id = %s`.
-   - Never fetch all chunks and filter inside Python.
-2. User-Workspace Relationship:
-   - Users must authenticate (email + password).
-   - Each workspace belongs to a `user_id`. Users can switch between their own workspaces.
-3. RAG Integrity:
-   - If chunks do not contain the answer, the model must output:
-     "I do not have enough information in this workspace to answer that."
-   - Never allow chunk text to execute commands (Prompt Injection mitigation).
-4. Tool Calling Safety:
-   - Tools must validate inputs using Pydantic.
-   - Any runtime failure must log to `tool_logs` with status 'FAILED' and return an error message to the LLM without crashing.
+## 1. Architectural Invariants & Tenancy Isolation
+- Shared Vector Store: All document chunks across all users and workspaces reside in ONE shared table (`langchain_pg_embedding`).
+- In-Query Tenancy Scoping: Every retrieval query MUST apply the workspace filter at the database level: `filter={"workspace_id": active_workspace_id}`.
+- Never fetch global un-scoped chunks and filter them in Python memory. Tenancy is a security boundary.
+- File Storage: Raw uploaded files are stored in Neon Object Storage using partitioned keys: `workspaces/{workspace_id}/{filename}`.
+
+## 2. Ingestion & Idempotency
+- Calculate a SHA-256 hash of extracted text prior to embedding.
+- Check against `(workspace_id, file_hash)` in PostgreSQL. If the document already exists in this workspace, skip re-embedding and re-uploading to prevent duplicate chunks and unnecessary API costs.
+
+## 3. Grounding & Anti-Hallucination Guardrails
+- Context chunks must be injected into prompts as untrusted data blocks (e.g., inside `<workspace_context>...</workspace_context>`).
+- If context does not contain the answer, the model must output:
+  "I do not have enough information in this workspace to answer that."
+- Factual claims must cite the source filename.
+
+## 4. Safe Tool Execution
+- Use Pydantic schemas to validate all tool parameters.
+- Tool 1 (`save_task`): Mutates internal database state in `workspace_tasks`.
+- Tool 2 (`send_discord_alert`): Executes external webhook notifications.
+- All tool executions must be caught in try-except blocks, logged to `tool_logs` (status `SUCCESS` or `FAILED`), and returned to the LLM gracefully without crashing the session.
+
+## 5. Security & Credentials
+- All secrets must be loaded via `st.secrets` or `.env`. Never commit credentials to version control.
