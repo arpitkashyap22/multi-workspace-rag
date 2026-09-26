@@ -36,14 +36,61 @@ def apply_custom_styles() -> None:
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            background: linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(59, 130, 246, 0.2));
-            border: 1px solid rgba(56, 189, 248, 0.35);
-            color: #38bdf8;
-            padding: 4px 12px;
+            background: linear-gradient(135deg, rgba(66, 133, 244, 0.15), rgba(155, 114, 203, 0.2));
+            border: 1px solid rgba(66, 133, 244, 0.35);
+            color: #8ab4f8;
+            padding: 4px 14px;
             border-radius: 9999px;
             font-size: 0.85rem;
             font-weight: 600;
             margin-bottom: 0.75rem;
+        }
+
+        /* Gemini Chat Styling Tokens */
+        .gemini-greeting {
+            background: linear-gradient(74deg, #4285f4 0%, #9b72cb 25%, #d96570 50%, #4285f4 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 2.5rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            line-height: 1.2;
+            margin-bottom: 0.2rem;
+        }
+
+        .gemini-subheading {
+            color: #9aa0a6;
+            font-size: 1.6rem;
+            font-weight: 500;
+            letter-spacing: -0.01em;
+            margin-bottom: 1.75rem;
+        }
+
+        .gemini-pill-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #e8eaed;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .gemini-source-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(66, 133, 244, 0.12);
+            border: 1px solid rgba(66, 133, 244, 0.3);
+            border-radius: 12px;
+            padding: 3px 10px;
+            font-size: 0.8rem;
+            color: #a8c7fa;
+            margin-right: 6px;
+            margin-top: 6px;
         }
 
         /* Metric Cards */
